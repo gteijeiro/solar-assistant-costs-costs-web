@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Cuenta{% endblock %}
+{% block content %}
+  <section class="header-grid">
+    <article class="hero-card">
+      <p class="eyebrow">Cuenta</p>
+      <h2>{{ current_user.username }}</h2>
+      <p>Rol actual: <strong>{{ role_label }}</strong></p>
+      <p>Desde aqui puedes actualizar tu contrasena. Si eres administrador, tambien puedes crear usuarios nuevos con perfil de solo lectura o de administracion.</p>
+    </article>
+
+    <article class="status-card">
+      <h3>Acceso</h3>
+      <p class="badge badge-success">{{ role_label }}</p>
+      {% if can_manage %}
+        <p>Tu usuario puede editar periodos, configuraciones y cuentas.</p>
+      {% else %}
+        <p>Tu usuario solo puede visualizar el tablero y el detalle de cada periodo.</p>
+      {% endif %}
+    </article>
+  </section>
+
+  <section class="two-column-grid">
+    <article class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Seguridad</p>
+          <h2>Cambiar contrasena</h2>
+        </div>
+      </div>
+      <form method="post" action="{{ url_for('change_password') }}" class="stack-form">
+        <label>Contrasena actual<input type="password" name="current_password" autocomplete="current-password" required></label>
+        <label>Nueva contrasena<input type="password" name="new_password" autocomplete="new-password" required></label>
+        <label>Repetir nueva contrasena<input type="password" name="confirm_password" autocomplete="new-password" required></label>
+        <button type="submit" class="primary-button">Actualizar contrasena</button>
+      </form>
+    </article>
+
+    {% if can_manage %}
+      <article class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Usuarios</p>
+            <h2>Crear usuario</h2>
+          </div>
+        </div>
+        <form method="post" action="{{ url_for('save_user') }}" class="stack-form">
+          <label>Usuario<input type="text" name="username" autocomplete="username" required></label>
+          <label>
+            Rol
+            <select name="role">
+              <option value="viewer">Visualizador</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </label>
+          <label>Contrasena<input type="password" name="password" autocomplete="new-password" required></label>
+          <label>Repetir contrasena<input type="password" name="password_confirm" autocomplete="new-password" required></label>
+          <button type="submit" class="primary-button">Crear usuario</button>
+        </form>
+      </article>
+    {% endif %}
+  </section>
+
+  {% if can_manage %}
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Usuarios</p>
+          <h2>Accesos configurados</h2>
+        </div>
+      </div>
+      <div class="table-shell">
+        <table>
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Rol</th>
+              <th>Estado</th>
+              <th>Creado</th>
+              <th>Accion</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for user in users %}
+              <tr>
+                <td>{{ user.username }}</td>
+                <td>{{ 'Administrador' if user.role == 'admin' else 'Visualizador' }}</td>
+                <td>{{ 'Habilitado' if user.enabled else 'Deshabilitado' }}</td>
+                <td>{{ user.created_at | datetime_local }}</td>
+                <td>
+                  {% if user.id == current_user.id %}
+                    <span class="muted">Sesion actual</span>
+                  {% else %}
+                    <form method="post" action="{{ url_for('toggle_user_enabled', user_id=user.id) }}">
+                      <input type="hidden" name="enabled" value="{{ '0' if user.enabled else '1' }}">
+                      <button type="submit" class="{{ 'danger-button' if user.enabled else 'ghost-button' }}">
+                        {{ 'Deshabilitar' if user.enabled else 'Habilitar' }}
+                      </button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}

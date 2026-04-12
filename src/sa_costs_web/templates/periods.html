@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Periodos{% endblock %}
+{% block content %}
+  <section class="header-grid">
+    <article class="hero-card">
+      <p class="eyebrow">Facturacion</p>
+      <h2>Periodos abiertos por fecha de inicio</h2>
+      <p>
+        Cada periodo solo necesita fecha de inicio. El fin se calcula automaticamente con el inicio del
+        siguiente periodo o con la fecha de hoy si sigue abierto.
+      </p>
+      <p>
+        Al crear un periodo nuevo, se copian automaticamente las franjas del ultimo mes que ya tenga precios
+        propios. Si todavia no existe uno, se usa la plantilla de configuracion. Lo mismo aplica para los cargos fijos.
+      </p>
+      <p>
+        Si cargas el consumo medido por la compania, ese valor se usa como consumo facturable del mes y se compara
+        contra lo medido por el inversor.
+      </p>
+    </article>
+    <article class="panel helper-card">
+      <h3>Como funciona</h3>
+      <p>Si la distribuidora mide el 19 o el 20, creas un nuevo periodo cuando llega la factura y el anterior se cierra solo.</p>
+    </article>
+  </section>
+
+  <section class="two-column-grid">
+    <article class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Alta o edicion</p>
+          <h2>Guardar periodo</h2>
+        </div>
+      </div>
+      <form method="post" action="{{ url_for('save_period') }}" class="stack-form">
+        <input type="hidden" name="period_id" value="">
+        <label>
+          Nombre
+          <input type="text" name="name" placeholder="Factura marzo 2026" required>
+        </label>
+        <label>
+          Inicio del periodo
+          <input type="date" name="starts_on" required>
+        </label>
+        <label>
+          Medido por la compania (kWh)
+          <input type="number" step="0.001" name="utility_measured_kwh" placeholder="Opcional">
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="has_inverter_data_issue">
+          Marcar error de medicion del inversor en este periodo
+        </label>
+        <label>
+          Notas
+          <textarea name="notes" rows="4" placeholder="Lectura de medidor del dia 19"></textarea>
+        </label>
+        <p class="muted">Despues de guardar, podras ajustar los precios y los cargos fijos del mes cuando llegue la factura.</p>
+        <button type="submit" class="primary-button">Guardar periodo</button>
+      </form>
+    </article>
+
+    <article class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Listado</p>
+          <h2>Periodos creados</h2>
+        </div>
+      </div>
+      {% if periods %}
+        <div class="list-stack">
+          {% for period in periods %}
+            {% set summary = period_summaries.get(period.id) if period_summaries else none %}
+            <div class="list-card">
+              <div>
+                <strong>{{ period.name }}</strong>
+                <p>Inicio: {{ period.starts_on }}</p>
+                {% if period.utility_measured_kwh is not none %}
+                  <p>Medido por compania: {{ period.utility_measured_kwh | kwh }} kWh</p>
+                {% endif %}
+                {% if period.has_inverter_data_issue %}
+                  <p><span class="badge badge-warning">Error manual de medicion</span></p>
+                {% endif %}
+                {% if summary and summary.has_missing_days %}
+                  <p><span class="badge badge-warning">Faltan {{ summary.missing_day_count }} dias sin medicion</span></p>
+                {% endif %}
+                {% if period.notes %}
+                  <p>{{ period.notes }}</p>
+                {% endif %}
+              </div>
+              <div class="inline-actions">
+                <a class="ghost-button inline-button" href="{{ url_for('period_detail', period_id=period.id) }}">Ver detalle</a>
+                <form method="post" action="{{ url_for('delete_period', period_id=period.id) }}">
+                  <button type="submit" class="danger-button">Eliminar</button>
+                </form>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted">Todavia no hay periodos cargados.</p>
+      {% endif %}
+    </article>
+  </section>
+{% endblock %}

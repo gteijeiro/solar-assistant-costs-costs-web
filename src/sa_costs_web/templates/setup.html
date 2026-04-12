@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Primer usuario{% endblock %}
+{% block content %}
+  <section class="auth-layout">
+    <article class="hero-card">
+      <p class="eyebrow">Primer paso</p>
+      <h2>Crea el usuario administrador</h2>
+      <p>
+        Este paso solo aparece una vez. Despues podras entrar con usuario y contrasena para configurar
+        franjas, periodos, cargos fijos e impuestos.
+      </p>
+    </article>
+
+    <article class="panel">
+      <h2>Alta inicial</h2>
+      <form method="post" class="stack-form">
+        <label>
+          Usuario
+          <input type="text" name="username" autocomplete="username" required>
+        </label>
+        <label>
+          Contrasena
+          <input type="password" name="password" autocomplete="new-password" required>
+        </label>
+        <label>
+          Repetir contrasena
+          <input type="password" name="password_confirm" autocomplete="new-password" required>
+        </label>
+        <button type="submit" class="primary-button">Crear administrador</button>
+      </form>
+    </article>
+  </section>
+{% endblock %}

@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}Configuracion{% endblock %}
+{% block content %}
+  <section class="header-grid">
+    <article class="hero-card">
+      <p class="eyebrow">Configuracion base</p>
+      <h2>Plantillas y reglas generales</h2>
+      <p>
+        Las franjas de energia se usan como plantilla inicial para nuevos periodos. Al crear un mes nuevo,
+        la app intenta copiar primero las tarifas del ultimo periodo que ya tenga precios propios; si no existe,
+        usa esta plantilla. Lo mismo pasa con los conceptos fijos y con las reglas por formula. Cada concepto
+        puede pertenecer a <strong>Servicio de energia</strong> o a <strong>IVA y otros conceptos</strong>.
+      </p>
+    </article>
+
+    <article class="panel helper-card">
+      <h3>Ayuda de expresiones</h3>
+      <p>Ejemplos validos:</p>
+      <ul class="expression-list">
+        <li><code>21% de total_factura</code></li>
+        <li><code>5% de costo_energia</code></li>
+        <li><code>(cargo_fijo + compensacion_mop + iva_21) * 10 / 100</code></li>
+        <li><code>1500</code></li>
+        <li><code>0.03 * subtotal</code></li>
+      </ul>
+      <p class="muted">Variables base: <code>costo_energia</code>, <code>energia_electrica</code>, <code>cargos_fijos</code>, <code>cargos_fijos_servicio</code>, <code>cargos_fijos_impuestos</code>, <code>subtotal</code>, <code>impuestos_acumulados</code>, <code>total_servicio_energia</code>, <code>iva_otros_conceptos</code>, <code>total_factura</code>, <code>consumo_kwh</code>.</p>
+      <p class="muted">Tambien puedes referenciar conceptos anteriores por alias. Si no cargas alias, puedes usar el nombre normalizado en minusculas y con guion bajo. Si una referencia no existe en ese periodo, vale <code>0</code>.</p>
+    </article>
+  </section>
+
+  <section class="config-grid">
+    <article class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Franjas</p>
+          <h2>Plantilla de tarifa por consumo</h2>
+        </div>
+      </div>
+
+      <form method="post" action="{{ url_for('save_default_band') }}" class="inline-form-grid">
+        <input type="hidden" name="band_id" value="">
+        <label>Orden<input type="number" name="position" value="{{ template_bands|length + 1 }}" min="1"></label>
+        <label>Etiqueta<input type="text" name="label" placeholder="Consumo base"></label>
+        <label>Desde kWh<input type="number" step="0.001" name="from_kwh" value="0" required></label>
+        <label>Hasta kWh<input type="number" step="0.001" name="to_kwh" placeholder="Sin limite"></label>
+        <label>Precio por kWh<input type="number" step="0.0001" name="price_per_kwh" value="0" required></label>
+        <button type="submit" class="primary-button">Agregar franja a la plantilla</button>
+      </form>
+
+      <div class="list-stack compact">
+        {% for band in template_bands %}
+          <div class="list-card form-card">
+            <form method="post" action="{{ url_for('save_default_band') }}" class="inline-form-grid">
+              <input type="hidden" name="band_id" value="{{ band.id }}">
+              <label>Orden<input type="number" name="position" value="{{ band.position }}" min="1"></label>
+              <label>Etiqueta<input type="text" name="label" value="{{ band.label }}"></label>
+              <label>Desde kWh<input type="number" step="0.001" name="from_kwh" value="{{ band.from_kwh }}" required></label>
+              <label>Hasta kWh<input type="number" step="0.001" name="to_kwh" value="{{ '' if band.to_kwh is none else band.to_kwh }}"></label>
+              <label>Precio por kWh<input type="number" step="0.0001" name="price_per_kwh" value="{{ band.price_per_kwh }}" required></label>
+              <button type="submit" class="ghost-button">Guardar</button>
+            </form>
+            <form method="post" action="{{ url_for('delete_default_band', band_id=band.id) }}">
+              <button type="submit" class="danger-button">Eliminar</button>
+            </form>
+          </div>
+        {% else %}
+          <p class="muted">No hay franjas en la plantilla. Los periodos nuevos no podran copiar precios hasta que cargues al menos una.</p>
+        {% endfor %}
+      </div>
+    </article>
+
+    <article class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Cargos fijos</p>
+          <h2>Plantilla de importes fijos</h2>
+        </div>
+      </div>
+
+      <form method="post" action="{{ url_for('save_default_charge') }}" class="inline-form-grid">
+        <input type="hidden" name="rule_id" value="">
+        <input type="hidden" name="kind" value="fixed">
+        <label>Orden<input type="number" name="position" value="{{ default_fixed|length + 1 }}" min="1"></label>
+        <label>
+          Seccion
+          <select name="section">
+            <option value="service" selected>Servicio de energia</option>
+            <option value="tax">IVA y otros conceptos</option>
+          </select>
+        </label>
+        <label>Nombre<input type="text" name="name" placeholder="Cargo fijo" required></label>
+        <label>Alias<input type="text" name="alias" placeholder="cargo_fijo"></label>
+        <label>Importe<input type="number" step="0.01" name="amount" value="0" required></label>
+        <label class="checkbox-label"><input type="checkbox" name="show_on_dashboard"> Mostrar en dashboard</label>
+        <label class="checkbox-label"><input type="checkbox" name="enabled" checked> Activo</label>
+        <button type="submit" class="primary-button">Agregar cargo a la plantilla</button>
+      </form>
+
+      <div class="list-stack compact">
+        {% for rule in default_fixed %}
+          <div class="list-card form-card">
+            <form method="post" action="{{ url_for('save_default_charge') }}" class="inline-form-grid">
+              <input type="hidden" name="rule_id" value="{{ rule.id }}">
+              <input type="hidden" name="kind" value="fixed">
+              <label>Orden<input type="number" name="position" value="{{ rule.position }}" min="1"></label>
+              <label>
+                Seccion
+                <select name="section">
+                  <option value="service" {% if (rule.section or 'service') == 'service' %}selected{% endif %}>Servicio de energia</option>
+                  <option value="tax" {% if rule.section == 'tax' %}selected{% endif %}>IVA y otros conceptos</option>
+                </select>
+              </label>
+              <label>Nombre<input type="text" name="name" value="{{ rule.name }}" required></label>
+              <label>Alias<input type="text" name="alias" value="{{ rule.alias or '' }}"></label>
+              <label>Importe<input type="number" step="0.01" name="amount" value="{{ rule.amount }}" required></label>
+              <label class="checkbox-label"><input type="checkbox" name="show_on_dashboard" {% if rule.show_on_dashboard %}checked{% endif %}> Mostrar en dashboard</label>
+              <label class="checkbox-label"><input type="checkbox" name="enabled" {% if rule.enabled %}checked{% endif %}> Activo</label>
+              <button type="submit" class="ghost-button">Guardar</button>
+            </form>
+            <form method="post" action="{{ url_for('delete_default_charge', rule_id=rule.id) }}">
+              <button type="submit" class="danger-button">Eliminar</button>
+            </form>
+          </div>
+        {% else %}
+          <p class="muted">No hay cargos fijos en la plantilla. Los periodos nuevos no podran copiarlos hasta que cargues al menos uno.</p>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+
+  <section class="panel">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Reglas por formula</p>
+        <h2>Conceptos calculados</h2>
+      </div>
+    </div>
+
+    <form method="post" action="{{ url_for('save_default_charge') }}" class="inline-form-grid">
+      <input type="hidden" name="rule_id" value="">
+      <input type="hidden" name="kind" value="tax">
+      <label>Orden<input type="number" name="position" value="{{ default_taxes|length + 1 }}" min="1"></label>
+      <label>
+        Seccion
+        <select name="section">
+          <option value="service">Servicio de energia</option>
+          <option value="tax" selected>IVA y otros conceptos</option>
+        </select>
+      </label>
+      <label>Nombre<input type="text" name="name" placeholder="IVA" required></label>
+      <label>Alias<input type="text" name="alias" placeholder="iva_21"></label>
+      <label class="wide-field">Expresion<input type="text" name="expression" placeholder="21% de total_factura" required></label>
+      <label class="checkbox-label"><input type="checkbox" name="enabled" checked> Activo</label>
+      <button type="submit" class="primary-button">Agregar impuesto</button>
+    </form>
+
+    <div class="list-stack compact">
+      {% for rule in default_taxes %}
+        <div class="list-card form-card">
+          <form method="post" action="{{ url_for('save_default_charge') }}" class="inline-form-grid">
+            <input type="hidden" name="rule_id" value="{{ rule.id }}">
+            <input type="hidden" name="kind" value="tax">
+            <label>Orden<input type="number" name="position" value="{{ rule.position }}" min="1"></label>
+            <label>
+              Seccion
+              <select name="section">
+                <option value="service" {% if rule.section == 'service' %}selected{% endif %}>Servicio de energia</option>
+                <option value="tax" {% if (rule.section or 'tax') == 'tax' %}selected{% endif %}>IVA y otros conceptos</option>
+              </select>
+            </label>
+            <label>Nombre<input type="text" name="name" value="{{ rule.name }}" required></label>
+            <label>Alias<input type="text" name="alias" value="{{ rule.alias or '' }}"></label>
+            <label class="wide-field">Expresion<input type="text" name="expression" value="{{ rule.expression }}" required></label>
+            <label class="checkbox-label"><input type="checkbox" name="enabled" {% if rule.enabled %}checked{% endif %}> Activo</label>
+            <button type="submit" class="ghost-button">Guardar</button>
+          </form>
+          <form method="post" action="{{ url_for('delete_default_charge', rule_id=rule.id) }}">
+            <button type="submit" class="danger-button">Eliminar</button>
+          </form>
+        </div>
+      {% else %}
+        <p class="muted">No hay impuestos configurados.</p>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}

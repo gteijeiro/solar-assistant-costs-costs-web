@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block title %}Tablero{% endblock %}
+{% block content %}
+  {% if bridge_status or bridge_error %}
+    <section class="bridge-rail {{ 'bridge-rail-danger' if bridge_error else 'bridge-rail-ok' }}">
+      <span class="bridge-pill {{ 'bridge-pill-danger' if bridge_error else ('bridge-pill-ok' if bridge_status and bridge_status.connected else 'bridge-pill-warn') }}">
+        {{ 'Sin bridge' if bridge_error else ('Conectado' if bridge_status and bridge_status.connected else 'Degradado') }}
+      </span>
+      {% if bridge_status %}
+        <span>Ultimo dato: <strong>{{ bridge_status.last_message_at | datetime_local }}</strong></span>
+      {% endif %}
+      {% if bridge_error %}
+        <span>{{ bridge_error }}</span>
+      {% endif %}
+    </section>
+  {% endif %}
+
+  {% if not periods %}
+    <section class="panel empty-state">
+      <h2>No hay periodos configurados</h2>
+      <p>Empieza creando el primer periodo de facturacion para delimitar el consumo a calcular.</p>
+      <a class="primary-button inline-button" href="{{ url_for('periods') }}">Ir a periodos</a>
+    </section>
+  {% else %}
+    {% if current_summary %}
+      <section class="summary-strip">
+        <article class="metric-card metric-card-period">
+          <span class="metric-label">Periodo actual</span>
+          <strong>{{ current_summary.period.name }}</strong>
+          <span>{{ current_summary.period.effective_start }} a {{ current_summary.period.effective_end }}</span>
+        </article>
+        <article class="metric-card metric-card-invoice">
+          <span class="metric-label">Costo total factura</span>
+          <strong>{{ current_summary.total | money }}</strong>
+          <span>Servicio + IVA y otros conceptos</span>
+        </article>
+        <article class="metric-card metric-card-energy">
+          <span class="metric-label">Energia electrica</span>
+          <strong>{{ current_summary.energy_cost | money }}</strong>
+          <span>Tarifa {{ current_summary.config_source.bands_scope }}</span>
+        </article>
+        <article class="metric-card metric-card-usage">
+          <span class="metric-label">Inversor</span>
+          <strong>{{ current_summary.inverter_consumption_kwh | kwh }} kWh</strong>
+          <span>{{ current_summary.daily_points | length }} dias con registro</span>
+        </article>
+        <article class="metric-card metric-card-company">
+          <span class="metric-label">Compania</span>
+          <strong>{% if current_summary.utility_consumption_kwh is not none %}{{ current_summary.utility_consumption_kwh | kwh }} kWh{% else %}Sin dato{% endif %}</strong>
+          <span>
+            {% if current_summary.consumption_difference_kwh is not none %}
+              Diferencia: {{ current_summary.consumption_difference_kwh | kwh }} kWh
+            {% else %}
+              Aun no cargaste la lectura real
+            {% endif %}
+          </span>
+        </article>
+        <article class="metric-card metric-card-billing">
+          <span class="metric-label">Consumo facturable</span>
+          <strong>{{ current_summary.billing_consumption_kwh | kwh }} kWh</strong>
+          <span>{% if current_summary.consumption_source == 'utility' %}Tomado de la compania{% else %}Tomado del inversor{% endif %}</span>
+        </article>
+        <article class="metric-card metric-card-service">
+          <span class="metric-label">Total servicio</span>
+          <strong>{{ current_summary.service_total | money }}</strong>
+          <span>Energia + cargos y formulas de servicio</span>
+        </article>
+        <article class="metric-card metric-card-neutral">
+          <span class="metric-label">Cobertura</span>
+          <strong>{{ current_summary.coverage_observed_day_count }}/{{ current_summary.coverage_expected_day_count }}</strong>
+          <span>Dias con medicion considerados para validar</span>
+        </article>
+        {% if yearly_change %}
+          <article class="metric-card metric-card-inflation">
+            <span class="metric-label">Variacion anual</span>
+            <strong>Hasta 12 meses</strong>
+            <span>Comparado con {{ yearly_change.baseline_period_name }}</span>
+            <span class="metric-subvalue">
+              Tarifas: {% if yearly_change.energy_rate_change_percent is not none %}{{ yearly_change.energy_rate_change_percent | percent }}{% else %}n/d{% endif %}
+              {% if yearly_change.energy_rate_baseline > 0 %}
+                | {{ yearly_change.energy_rate_baseline | money }}/kWh -> {{ yearly_change.energy_rate_current | money }}/kWh
+              {% endif %}
+            </span>
+            <span class="metric-subvalue">
+              Cargos fijos: {% if yearly_change.fixed_total_change_percent is not none %}{{ yearly_change.fixed_total_change_percent | percent }}{% else %}n/d{% endif %}
+              {% if yearly_change.fixed_total_baseline > 0 %}
+                | {{ yearly_change.fixed_total_baseline | money }} -> {{ yearly_change.fixed_total_current | money }}
+              {% endif %}
+            </span>
+          </article>
+        {% endif %}
+        <article class="metric-card metric-card-warning">
+          <span class="metric-label">Integridad inversor</span>
+          <strong>{{ 'Revisar' if current_summary.has_inverter_issue else 'OK' }}</strong>
+          <span>{{ current_summary.inverter_issue_summary }}</span>
+        </article>
+      </section>
+    {% endif %}
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Periodos</p>
+          <h2>Detalle calculado</h2>
+        </div>
+        {% if can_manage %}
+          <a class="ghost-button inline-button" href="{{ url_for('periods') }}">Administrar periodos</a>
+        {% endif %}
+      </div>
+      <div class="table-shell">
+        <table>
+          <thead>
+            <tr>
+              <th>Periodo</th>
+              <th>Rango</th>
+              <th>Inversor</th>
+              <th>Compania</th>
+              <th>Facturable</th>
+              <th>Medicion</th>
+              <th>Energia electrica</th>
+              <th>Total servicio</th>
+              <th>IVA y otros</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for summary in summaries %}
+              <tr>
+                <td>
+                  <a href="{{ url_for('period_detail', period_id=summary.period.id) }}">{{ summary.period.name }}</a>
+                  {% if summary.period.is_open %}
+                    <span class="pill">Abierto</span>
+                  {% endif %}
+                  {% if summary.has_inverter_issue %}
+                    <span class="badge badge-warning">Revisar</span>
+                  {% endif %}
+                </td>
+                <td>{{ summary.period.effective_start }} a {{ summary.period.effective_end }}</td>
+                <td>{{ summary.inverter_consumption_kwh | kwh }} kWh</td>
+                <td>
+                  {% if summary.utility_consumption_kwh is not none %}
+                    {{ summary.utility_consumption_kwh | kwh }} kWh
+                  {% else %}
+                    Sin dato
+                  {% endif %}
+                </td>
+                <td>{{ summary.billing_consumption_kwh | kwh }} kWh</td>
+                <td>
+                  <strong>{{ 'Revisar' if summary.has_inverter_issue else 'OK' }}</strong><br>
+                  <small>{{ summary.inverter_issue_summary }}</small>
+                </td>
+                <td>{{ summary.energy_cost | money }}</td>
+                <td>{{ summary.service_total | money }}</td>
+                <td>{{ summary.other_concepts_total | money }}</td>
+                <td><strong>{{ summary.total | money }}</strong></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    {% if consumption_chart or costs_chart or tariff_price_chart or fixed_charge_chart %}
+      <section class="panel chart-collection" data-chart-collection>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Graficos</p>
+            <h2>Comparativos por periodo</h2>
+            <p>Puedes alternar entre barras y una vista de area similar a la del inversor.</p>
+          </div>
+          <div class="toggle-group">
+            <button type="button" class="toggle-button" data-chart-mode-button="bar" aria-pressed="false">Barras</button>
+            <button type="button" class="toggle-button is-active" data-chart-mode-button="area" aria-pressed="true">Area</button>
+          </div>
+        </div>
+        <div class="chart-grid">
+          {% if consumption_chart %}
+            <article class="chart-card" data-chart-card>
+              <div class="chart-card-header">
+                <div>
+                  <h3>{{ consumption_chart.title }}</h3>
+                  <p>{{ consumption_chart.subtitle }}</p>
+                </div>
+                <div class="chart-legend">
+                  {% for item in consumption_chart.legend %}
+                    <span class="legend-chip"><span class="legend-swatch" style="background: {{ item.color }}"></span>{{ item.label }}</span>
+                  {% endfor %}
+                </div>
+              </div>
+              <div class="chart-stage" data-chart-view="bar" hidden>{{ consumption_chart.bar_svg }}</div>
+              <div class="chart-stage" data-chart-view="area">{{ consumption_chart.area_svg }}</div>
+            </article>
+          {% endif %}
+
+          {% if costs_chart %}
+            <article class="chart-card" data-chart-card>
+              <div class="chart-card-header">
+                <div>
+                  <h3>{{ costs_chart.title }}</h3>
+                  <p>{{ costs_chart.subtitle }}</p>
+                </div>
+                <div class="chart-legend">
+                  {% for item in costs_chart.legend %}
+                    <span class="legend-chip"><span class="legend-swatch" style="background: {{ item.color }}"></span>{{ item.label }}</span>
+                  {% endfor %}
+                </div>
+              </div>
+              <div class="chart-stage" data-chart-view="bar" hidden>{{ costs_chart.bar_svg }}</div>
+              <div class="chart-stage" data-chart-view="area">{{ costs_chart.area_svg }}</div>
+            </article>
+          {% endif %}
+
+          {% if tariff_price_chart %}
+            <article class="chart-card" data-chart-card>
+              <div class="chart-card-header">
+                <div>
+                  <h3>{{ tariff_price_chart.title }}</h3>
+                  <p>{{ tariff_price_chart.subtitle }}</p>
+                </div>
+                <div class="chart-legend">
+                  {% for item in tariff_price_chart.legend %}
+                    <span class="legend-chip"><span class="legend-swatch" style="background: {{ item.color }}"></span>{{ item.label }}</span>
+                  {% endfor %}
+                </div>
+              </div>
+              <div class="chart-stage" data-chart-view="bar" hidden>{{ tariff_price_chart.bar_svg }}</div>
+              <div class="chart-stage" data-chart-view="area">{{ tariff_price_chart.area_svg }}</div>
+            </article>
+          {% endif %}
+
+          {% if fixed_charge_chart %}
+            <article class="chart-card" data-chart-card>
+              <div class="chart-card-header">
+                <div>
+                  <h3>{{ fixed_charge_chart.title }}</h3>
+                  <p>{{ fixed_charge_chart.subtitle }}</p>
+                </div>
+                <div class="chart-legend">
+                  {% for item in fixed_charge_chart.legend %}
+                    <span class="legend-chip"><span class="legend-swatch" style="background: {{ item.color }}"></span>{{ item.label }}</span>
+                  {% endfor %}
+                </div>
+              </div>
+              <div class="chart-stage" data-chart-view="bar" hidden>{{ fixed_charge_chart.bar_svg }}</div>
+              <div class="chart-stage" data-chart-view="area">{{ fixed_charge_chart.area_svg }}</div>
+            </article>
+          {% endif %}
+        </div>
+      </section>
+    {% endif %}
+  {% endif %}
+{% endblock %}
