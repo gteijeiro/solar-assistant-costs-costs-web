@@ -35,7 +35,7 @@
         <span class="overview-chip">
           <strong>Fuente</strong>
           {% if summary %}
-            {{ 'Compania' if summary.consumption_source == 'utility' else 'Inversor' }}
+            {{ 'Compania' if summary.consumption_source == 'utility' else 'Red' }}
           {% else %}
             Sin definir
           {% endif %}
@@ -81,7 +81,7 @@
           </span>
         </div>
         <div class="status-inline-list">
-          <span><strong>Inversor:</strong> {{ summary.inverter_consumption_kwh | kwh }} kWh</span>
+          <span><strong>Red:</strong> {{ summary.inverter_consumption_kwh | kwh }} kWh</span>
           <span><strong>Carga total:</strong> {{ summary.inverter_load_kwh | kwh }} kWh</span>
           <span><strong>Medicion:</strong> {{ summary.inverter_issue_summary }}</span>
         </div>
@@ -102,9 +102,9 @@
           {% endif %}
         </article>
         <article class="metric-card metric-card-usage">
-          <span class="metric-label">Inversor</span>
+          <span class="metric-label">Red</span>
           <strong>{{ summary.inverter_consumption_kwh | kwh }} kWh</strong>
-          <span>Total medido por SolarAssistant</span>
+          <span>Consumo de red medido por SolarAssistant</span>
         </article>
         <article class="metric-card metric-card-source metric-card-source-{{ summary.consumption_source }}">
           <span class="metric-label">Energia electrica</span>
@@ -170,12 +170,12 @@
         <article class="metric-card metric-card-source metric-card-source-{{ summary.consumption_source }}">
           <span class="metric-label">Usado para calcular</span>
           <strong>{{ summary.billing_consumption_kwh | kwh }} kWh</strong>
-          <span>{% if summary.consumption_source == 'utility' %}Tomado de la compania{% else %}Tomado del inversor{% endif %}</span>
+          <span>{% if summary.consumption_source == 'utility' %}Tomado de la compania{% else %}Tomado de la red del inversor{% endif %}</span>
           {% if can_manage %}
             <div class="source-toggle">
               <form method="post" action="{{ url_for('save_period_billing_source', period_id=period.id) }}">
                 <input type="hidden" name="billing_source" value="inverter">
-                <button type="submit" class="source-toggle-button {{ 'is-active' if summary.consumption_source == 'inverter' else '' }}">Inversor</button>
+                <button type="submit" class="source-toggle-button {{ 'is-active' if summary.consumption_source == 'inverter' else '' }}">Red</button>
               </form>
               {% if summary.utility_consumption_kwh is not none %}
                 <form method="post" action="{{ url_for('save_period_billing_source', period_id=period.id) }}">
@@ -230,7 +230,7 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">Comparacion</p>
-            <h2>Inversor vs compania</h2>
+            <h2>Red vs compania</h2>
           </div>
         </div>
         <div class="comparison-stack">
@@ -241,13 +241,13 @@
                 {% if period_comparison.source == 'utility' %}
                   El calculo usa la lectura de la compania.
                 {% else %}
-                  El calculo usa la lectura del inversor.
+                  El calculo usa la red medida por el inversor.
                 {% endif %}
               </span>
             </div>
             <div class="comparison-bars">
               <div class="bar-line">
-                <div class="bar-label"><span>Inversor</span><strong>{{ period_comparison.inverter_kwh | kwh }} kWh</strong></div>
+                <div class="bar-label"><span>Red</span><strong>{{ period_comparison.inverter_kwh | kwh }} kWh</strong></div>
                 <div class="bar-track"><div class="bar-fill inverter-bar" style="width: {{ period_comparison.inverter_pct }}%"></div></div>
               </div>
               <div class="bar-line">
@@ -319,7 +319,7 @@
           </div>
         </div>
         <div class="table-shell">
-          <table>
+          <table class="responsive-detail-table">
             <thead>
               <tr>
                 <th>Concepto</th>
@@ -331,32 +331,32 @@
             <tbody>
               {% for item in summary.service_breakdown %}
                 <tr>
-                  <td>
+                  <td data-label="Concepto">
                     {{ item.name }}
                     {% if item.alias %}
                       <small>{{ item.alias }}</small>
                     {% endif %}
                   </td>
-                  <td>
+                  <td data-label="Tipo">
                     {% if item.kind == 'energy' %}Tarifa{% elif item.kind == 'fixed' %}Fijo{% else %}Formula{% endif %}
                   </td>
-                  <td>
+                  <td data-label="Configuracion">
                     {% if item.kind == 'fixed' %}
                       {{ item.configured_value | money }}
                     {% else %}
                       {{ item.configured_value }}
                     {% endif %}
                   </td>
-                  <td>{{ item.amount | money }}</td>
+                  <td data-label="Resultado">{{ item.amount | money }}</td>
                 </tr>
               {% else %}
-                <tr><td colspan="4">Sin conceptos de servicio.</td></tr>
+                <tr><td colspan="4" data-full-row="true">Sin conceptos de servicio.</td></tr>
               {% endfor %}
             </tbody>
             <tfoot>
               <tr>
-                <td colspan="3"><strong>Total servicio de energia</strong></td>
-                <td><strong>{{ summary.service_total | money }}</strong></td>
+                <td colspan="3" data-label="Resumen" data-full-row="true"><strong>Total servicio de energia</strong></td>
+                <td data-label="Total"><strong>{{ summary.service_total | money }}</strong></td>
               </tr>
             </tfoot>
           </table>
@@ -371,7 +371,7 @@
           </div>
         </div>
         <div class="table-shell">
-          <table>
+          <table class="responsive-detail-table">
             <thead>
               <tr>
                 <th>Concepto</th>
@@ -383,30 +383,30 @@
             <tbody>
               {% for item in summary.other_concepts_breakdown %}
                 <tr>
-                  <td>
+                  <td data-label="Concepto">
                     {{ item.name }}
                     {% if item.alias %}
                       <small>{{ item.alias }}</small>
                     {% endif %}
                   </td>
-                  <td>{% if item.kind == 'fixed' %}Fijo{% else %}Formula{% endif %}</td>
-                  <td>
+                  <td data-label="Tipo">{% if item.kind == 'fixed' %}Fijo{% else %}Formula{% endif %}</td>
+                  <td data-label="Configuracion">
                     {% if item.kind == 'fixed' %}
                       {{ item.configured_value | money }}
                     {% else %}
                       {{ item.configured_value }}
                     {% endif %}
                   </td>
-                  <td>{{ item.amount | money }}</td>
+                  <td data-label="Resultado">{{ item.amount | money }}</td>
                 </tr>
               {% else %}
-                <tr><td colspan="4">Sin conceptos en IVA y otros.</td></tr>
+                <tr><td colspan="4" data-full-row="true">Sin conceptos en IVA y otros.</td></tr>
               {% endfor %}
             </tbody>
             <tfoot>
               <tr>
-                <td colspan="3"><strong>Total IVA y otros conceptos</strong></td>
-                <td><strong>{{ summary.other_concepts_total | money }}</strong></td>
+                <td colspan="3" data-label="Resumen" data-full-row="true"><strong>Total IVA y otros conceptos</strong></td>
+                <td data-label="Total"><strong>{{ summary.other_concepts_total | money }}</strong></td>
               </tr>
             </tfoot>
           </table>
@@ -715,7 +715,7 @@
         </div>
       </div>
       <div class="table-shell">
-        <table>
+        <table class="responsive-detail-table responsive-daily-cost-table">
           <thead>
             <tr>
               <th>Fecha</th>
@@ -731,27 +731,27 @@
           <tbody>
             {% for item in summary.daily_energy_cost_breakdown %}
               <tr>
-                <td>{{ item.date }}</td>
-                <td>
+                <td data-label="Fecha">{{ item.date }}</td>
+                <td data-label="Medicion">
                   {% if item.has_measurement %}
                     <span class="badge badge-success">Con medicion</span>
                   {% else %}
                     <span class="badge badge-warning">Sin medicion</span>
                   {% endif %}
                 </td>
-                <td>{{ item.inverter_grid_kwh | kwh }} kWh</td>
-                <td>{{ item.billed_kwh | kwh }} kWh</td>
-                <td>{{ item.load_kwh | kwh }} kWh</td>
-                <td>{{ item.solar_pv_kwh | kwh }} kWh</td>
-                <td>{{ item.energy_cost | money }}</td>
-                <td>{{ item.cumulative_energy_cost | money }}</td>
+                <td data-label="Red inversor">{{ item.inverter_grid_kwh | kwh }} kWh</td>
+                <td data-label="Usado para calcular">{{ item.billed_kwh | kwh }} kWh</td>
+                <td data-label="Carga total">{{ item.load_kwh | kwh }} kWh</td>
+                <td data-label="Solar PV">{{ item.solar_pv_kwh | kwh }} kWh</td>
+                <td data-label="Costo energia">{{ item.energy_cost | money }}</td>
+                <td data-label="Acumulado">{{ item.cumulative_energy_cost | money }}</td>
               </tr>
             {% endfor %}
           </tbody>
           <tfoot>
             <tr>
-              <td colspan="6"><strong>Total costo de energia del periodo</strong></td>
-              <td colspan="2"><strong>{{ summary.energy_cost | money }}</strong></td>
+              <td colspan="6" data-label="Resumen" data-full-row="true"><strong>Total costo de energia del periodo</strong></td>
+              <td colspan="2" data-label="Total" data-full-row="true"><strong>{{ summary.energy_cost | money }}</strong></td>
             </tr>
           </tfoot>
         </table>

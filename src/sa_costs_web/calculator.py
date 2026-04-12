@@ -277,9 +277,9 @@ def calculate_period_summary(
         "subtotal": active_variant["subtotal"],
         "total": active_variant["total"],
         "config_source": {
-            "bands_scope": "period" if _has_period_scope(tariff_bands) else "default",
-            "fixed_scope": "period" if _has_period_scope(fixed_charges) else "default",
-            "tax_scope": "period" if _has_period_scope(tax_rules) else "default",
+            "bands_scope": describe_scope_label("period" if _has_period_scope(tariff_bands) else "default"),
+            "fixed_scope": describe_scope_label("period" if _has_period_scope(fixed_charges) else "default"),
+            "tax_scope": describe_scope_label("period" if _has_period_scope(tax_rules) else "default"),
         },
     }
 
@@ -424,6 +424,10 @@ def calculate_cost_variant(
 
 def _has_period_scope(items: list[dict[str, Any]]) -> bool:
     return any(item.get("scope") == "period" for item in items)
+
+
+def describe_scope_label(scope: str) -> str:
+    return "Periodo" if scope == "period" else "Plantilla"
 
 
 def calculate_energy_cost(consumption_kwh: float, tariff_bands: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], float]:

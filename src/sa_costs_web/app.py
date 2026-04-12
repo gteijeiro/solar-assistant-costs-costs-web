@@ -1198,11 +1198,11 @@ def render_bar_chart_svg(
     value_kind: str,
 ) -> Markup:
     width = 1100
-    height = 360
+    height = 600
     left = 72
     right = 24
-    top = 24
-    bottom = 58
+    top = 28
+    bottom = 82
     plot_width = width - left - right
     plot_height = height - top - bottom
     baseline_y = top + plot_height
@@ -1272,11 +1272,11 @@ def render_area_chart_svg(
     value_kind: str,
 ) -> Markup:
     width = 1100
-    height = 360
+    height = 600
     left = 72
     right = 24
-    top = 24
-    bottom = 58
+    top = 28
+    bottom = 82
     plot_width = width - left - right
     plot_height = height - top - bottom
     baseline_y = top + plot_height
