@@ -413,6 +413,11 @@ body.nav-open {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.auth-layout-single {
+  grid-template-columns: minmax(0, 460px);
+  justify-content: center;
+}
+
 .config-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -1453,6 +1458,16 @@ code {
 
   .chart-stage {
     margin-inline: -4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 6px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .chart-stage svg {
+    width: clamp(620px, 165vw, 760px);
+    max-width: none;
+    height: auto;
   }
 
   .chart-card h3 {

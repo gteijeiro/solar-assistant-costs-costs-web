@@ -855,7 +855,7 @@ def build_consumption_chart(comparison_data: ConsumptionComparisonData) -> Toggl
 
     return build_toggle_chart(
         title="Consumo por periodo",
-        subtitle="Compara red del inversor, compania, consumo total load y generacion solar PV en cada periodo.",
+        subtitle="Compara red, compania, consumo total load y generacion solar PV en cada periodo.",
         labels=[str(item["axis_label"]) for item in comparison_data.items],
         full_labels=[str(item["full_label"]) for item in comparison_data.items],
         datasets=[
@@ -866,7 +866,7 @@ def build_consumption_chart(comparison_data: ConsumptionComparisonData) -> Toggl
                 "values": [float(item["load_kwh"]) for item in comparison_data.items],
             },
             {
-                "label": "Red inversor",
+                "label": "Red",
                 "color": "#ef4444",
                 "fill": "rgba(239, 68, 68, 0.18)",
                 "values": [float(item["inverter_kwh"]) for item in comparison_data.items],

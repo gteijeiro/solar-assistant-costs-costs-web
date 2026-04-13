@@ -34,13 +34,18 @@
           <strong>{{ current_summary.total | money }}</strong>
           <span>Servicio + IVA y otros conceptos</span>
         </article>
+        <article class="metric-card metric-card-service">
+          <span class="metric-label">Costo total energia</span>
+          <strong>{{ current_summary.service_total | money }}</strong>
+          <span>Energia + cargos y formulas de servicio</span>
+        </article>
         <article class="metric-card metric-card-energy">
           <span class="metric-label">Energia electrica</span>
           <strong>{{ current_summary.energy_cost | money }}</strong>
           <span>Tarifa {{ current_summary.config_source.bands_scope }}</span>
         </article>
         <article class="metric-card metric-card-usage">
-          <span class="metric-label">Inversor</span>
+          <span class="metric-label">Red</span>
           <strong>{{ current_summary.inverter_consumption_kwh | kwh }} kWh</strong>
           <span>{{ current_summary.daily_points | length }} dias con registro</span>
         </article>
@@ -58,12 +63,7 @@
         <article class="metric-card metric-card-billing">
           <span class="metric-label">Consumo facturable</span>
           <strong>{{ current_summary.billing_consumption_kwh | kwh }} kWh</strong>
-          <span>{% if current_summary.consumption_source == 'utility' %}Tomado de la compania{% else %}Tomado del inversor{% endif %}</span>
-        </article>
-        <article class="metric-card metric-card-service">
-          <span class="metric-label">Total servicio</span>
-          <strong>{{ current_summary.service_total | money }}</strong>
-          <span>Energia + cargos y formulas de servicio</span>
+          <span>{% if current_summary.consumption_source == 'utility' %}Tomado de la compania{% else %}Tomado de la red del inversor{% endif %}</span>
         </article>
         <article class="metric-card metric-card-neutral">
           <span class="metric-label">Cobertura</span>
@@ -113,7 +113,7 @@
             <tr>
               <th>Periodo</th>
               <th>Rango</th>
-              <th>Inversor</th>
+              <th>Red</th>
               <th>Compania</th>
               <th>Facturable</th>
               <th>Medicion</th>
