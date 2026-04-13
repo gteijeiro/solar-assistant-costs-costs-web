@@ -16,58 +16,68 @@
   </head>
   <body>
     <div class="nav-backdrop" data-nav-backdrop hidden></div>
-    <div class="page-shell">
-      <header class="topbar">
-        <div class="topbar-brand">
-          <p class="eyebrow">Energy Costs</p>
-          <h1 class="topbar-title">Calculadora de costo electrico</h1>
-        </div>
-        {% if current_user %}
-          <button type="button" class="nav-toggle" data-nav-toggle aria-controls="site-nav" aria-expanded="false" aria-label="Abrir menu">
-            <span class="nav-toggle-icon" aria-hidden="true">
-              <span></span>
-              <span></span>
-              <span></span>
-            </span>
-            <span class="nav-toggle-text">Menu</span>
-          </button>
-          <nav class="topnav" id="site-nav" data-nav>
-            <div class="topnav-links">
-              <a href="{{ url_for('dashboard') }}">Tablero</a>
-              {% if can_manage %}
-                <a href="{{ url_for('periods') }}">Periodos</a>
-                <a href="{{ url_for('settings') }}">Configuracion</a>
-              {% endif %}
-              <a href="{{ url_for('account') }}">Cuenta</a>
-            </div>
-            <div class="topnav-actions">
-              <button type="button" class="ghost-button install-button" data-install-button hidden>Instalar app</button>
-              <div class="nav-user">
-                <strong>{{ current_user.username }}</strong>
-                <span class="pill role-pill">{{ role_label }}</span>
-              </div>
-              <form method="post" action="{{ url_for('logout') }}">
-                <button type="submit" class="ghost-button">Salir</button>
-              </form>
-            </div>
+    <div class="app-shell{% if current_user %} app-shell-authenticated{% endif %}">
+      {% if current_user %}
+        <aside class="sidebar" id="site-nav" data-nav>
+          <div class="sidebar-brand">
+            <p class="eyebrow">Energy Costs</p>
+            <h1 class="sidebar-title">Calculadora de costo electrico</h1>
+          </div>
+          <nav class="sidebar-links">
+            <a class="sidebar-link" href="{{ url_for('dashboard') }}">Dashboard</a>
+            {% if can_manage %}
+              <a class="sidebar-link" href="{{ url_for('periods') }}">Periodos</a>
+              <a class="sidebar-link" href="{{ url_for('settings') }}">Configuracion</a>
+            {% endif %}
+            <a class="sidebar-link" href="{{ url_for('account') }}">Cuenta</a>
           </nav>
-        {% endif %}
-      </header>
+          <div class="sidebar-actions">
+            <button type="button" class="ghost-button install-button sidebar-action-button" data-install-button hidden>Instalar app</button>
+            <div class="nav-user sidebar-user">
+              <strong>{{ current_user.username }}</strong>
+              <span class="pill role-pill">{{ role_label }}</span>
+            </div>
+            <form method="post" action="{{ url_for('logout') }}">
+              <button type="submit" class="ghost-button sidebar-action-button">Salir</button>
+            </form>
+          </div>
+        </aside>
+      {% endif %}
 
-      <main class="content">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            <section class="flash-stack">
-              {% for category, message in messages %}
-                <article class="flash flash-{{ category }}">{{ message }}</article>
-              {% endfor %}
-            </section>
+      <div class="page-shell">
+        <header class="topbar{% if current_user %} topbar-authenticated{% endif %}">
+          <div class="topbar-brand">
+            <p class="eyebrow">Energy Costs</p>
+            <h1 class="topbar-title">Calculadora de costo electrico</h1>
+          </div>
+          {% if current_user %}
+            <button type="button" class="nav-toggle" data-nav-toggle aria-controls="site-nav" aria-expanded="false" aria-label="Abrir menu">
+              <span class="nav-toggle-icon" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+              </span>
+              <span class="nav-toggle-text">Menu</span>
+            </button>
           {% endif %}
-        {% endwith %}
+        </header>
 
-        {% block content %}{% endblock %}
-      </main>
+        <main class="content">
+          {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+              <section class="flash-stack">
+                {% for category, message in messages %}
+                  <article class="flash flash-{{ category }}">{{ message }}</article>
+                {% endfor %}
+              </section>
+            {% endif %}
+          {% endwith %}
+
+          {% block content %}{% endblock %}
+        </main>
+      </div>
     </div>
+    <script src="{{ url_for('static', filename='echarts.min.js') }}" defer></script>
     <script src="{{ url_for('static', filename='app.js') }}" defer></script>
   </body>
 </html>

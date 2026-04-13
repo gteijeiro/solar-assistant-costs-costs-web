@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Tablero{% endblock %}
+{% block title %}Dashboard{% endblock %}
 {% block content %}
   {% if bridge_status or bridge_error %}
     <section class="bridge-rail {{ 'bridge-rail-danger' if bridge_error else 'bridge-rail-ok' }}">
@@ -187,8 +187,10 @@
                   {% endfor %}
                 </div>
               </div>
-              <div class="chart-stage" data-chart-view="bar" hidden>{{ consumption_chart.bar_svg }}</div>
-              <div class="chart-stage" data-chart-view="area">{{ consumption_chart.area_svg }}</div>
+              <div class="chart-stage">
+                <div class="echart-root" data-echart data-chart-config-id="consumption-chart-config"></div>
+              </div>
+              <script id="consumption-chart-config" type="application/json">{{ consumption_chart.config | tojson }}</script>
             </article>
           {% endif %}
 
@@ -205,8 +207,10 @@
                   {% endfor %}
                 </div>
               </div>
-              <div class="chart-stage" data-chart-view="bar" hidden>{{ costs_chart.bar_svg }}</div>
-              <div class="chart-stage" data-chart-view="area">{{ costs_chart.area_svg }}</div>
+              <div class="chart-stage">
+                <div class="echart-root" data-echart data-chart-config-id="costs-chart-config"></div>
+              </div>
+              <script id="costs-chart-config" type="application/json">{{ costs_chart.config | tojson }}</script>
             </article>
           {% endif %}
 
@@ -223,8 +227,10 @@
                   {% endfor %}
                 </div>
               </div>
-              <div class="chart-stage" data-chart-view="bar" hidden>{{ tariff_price_chart.bar_svg }}</div>
-              <div class="chart-stage" data-chart-view="area">{{ tariff_price_chart.area_svg }}</div>
+              <div class="chart-stage">
+                <div class="echart-root" data-echart data-chart-config-id="tariff-price-chart-config"></div>
+              </div>
+              <script id="tariff-price-chart-config" type="application/json">{{ tariff_price_chart.config | tojson }}</script>
             </article>
           {% endif %}
 
@@ -241,8 +247,10 @@
                   {% endfor %}
                 </div>
               </div>
-              <div class="chart-stage" data-chart-view="bar" hidden>{{ fixed_charge_chart.bar_svg }}</div>
-              <div class="chart-stage" data-chart-view="area">{{ fixed_charge_chart.area_svg }}</div>
+              <div class="chart-stage">
+                <div class="echart-root" data-echart data-chart-config-id="fixed-charge-chart-config"></div>
+              </div>
+              <script id="fixed-charge-chart-config" type="application/json">{{ fixed_charge_chart.config | tojson }}</script>
             </article>
           {% endif %}
         </div>

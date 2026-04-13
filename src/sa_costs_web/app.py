@@ -74,8 +74,7 @@ class ToggleChartData:
     title: str
     subtitle: str
     legend: list[dict[str, str]]
-    bar_svg: Markup
-    area_svg: Markup
+    config: dict[str, Any]
 
 
 def localize_number_text(text: str) -> str:
@@ -1121,22 +1120,15 @@ def build_toggle_chart(
         title=title,
         subtitle=subtitle,
         legend=[{"label": str(dataset["label"]), "color": str(dataset["color"])} for dataset in normalized_datasets],
-        bar_svg=render_bar_chart_svg(
-            labels=labels,
-            full_labels=full_labels,
-            datasets=normalized_datasets,
-            min_value=min_value,
-            max_value=max_value,
-            value_kind=value_kind,
-        ),
-        area_svg=render_area_chart_svg(
-            labels=labels,
-            full_labels=full_labels,
-            datasets=normalized_datasets,
-            min_value=min_value,
-            max_value=max_value,
-            value_kind=value_kind,
-        ),
+        config={
+            "labels": labels,
+            "full_labels": full_labels,
+            "datasets": normalized_datasets,
+            "min_value": min_value,
+            "max_value": max_value,
+            "value_kind": value_kind,
+            "default_mode": "area",
+        },
     )
 
 

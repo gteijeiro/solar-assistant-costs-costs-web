@@ -1,7 +1,8 @@
-const CACHE_NAME = "energy-costs-shell-v3";
+const CACHE_NAME = "energy-costs-shell-v4";
 const APP_SHELL = [
   "/static/app.css",
   "/static/app.js",
+  "/static/echarts.min.js",
   "/static/icon.svg",
   "/manifest.webmanifest"
 ];

@@ -232,16 +232,16 @@ def calculate_period_summary(
         "consumption_difference_kwh": consumption_difference_kwh,
         "consumption_difference_percent": consumption_difference_percent,
         "billing_variants": {
-            "inverter": {**inverter_variant, "source": "inverter", "label": "Inversor"},
+            "inverter": {**inverter_variant, "source": "inverter", "label": "Red"},
             "utility": ({**utility_variant, "source": "utility", "label": "Compania"} if utility_variant is not None else None),
         },
-        "selected_variant": {**active_variant, "source": consumption_source, "label": ("Compania" if consumption_source == "utility" else "Inversor")},
+        "selected_variant": {**active_variant, "source": consumption_source, "label": ("Compania" if consumption_source == "utility" else "Red")},
         "load_variant": {**load_variant, "source": "load", "label": "Carga total"},
         "alternate_variant": (
             {
                 **alternate_variant,
                 "source": ("inverter" if consumption_source == "utility" else "utility"),
-                "label": ("Inversor" if consumption_source == "utility" else "Compania"),
+                "label": ("Red" if consumption_source == "utility" else "Compania"),
             }
             if alternate_variant is not None
             else None

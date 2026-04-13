@@ -271,6 +271,8 @@ class WebAppTests(unittest.TestCase):
         self.assertIn("Factura mayo 2025", dashboard_html)
         self.assertIn("Load", dashboard_html)
         self.assertIn("Solar PV", dashboard_html)
+        self.assertIn("echarts.min.js", dashboard_html)
+        self.assertIn("data-echart", dashboard_html)
         self.assertIn("Integridad inversor", dashboard_html)
         self.assertIn("Barras", dashboard_html)
         self.assertIn("Area", dashboard_html)
@@ -284,12 +286,12 @@ class WebAppTests(unittest.TestCase):
         self.assertIn("Generacion solar", period_html)
         self.assertIn("Factura teorica sin solar", period_html)
         self.assertIn("Ahorro solar estimado", period_html)
-        self.assertIn("Con inversor", period_html)
+        self.assertIn("Con red", period_html)
         self.assertIn("Costo de energia por dia", period_html)
         self.assertIn("Usado para calcular", period_html)
         self.assertIn("Con medicion", period_html)
         self.assertIn("Marcar error de medicion del inversor en este periodo", periods_html)
-        self.assertIn("Tomado del inversor", switch_html)
+        self.assertIn("Tomado de la red del inversor", switch_html)
 
     def test_viewer_cannot_access_management_and_can_change_password(self) -> None:
         with self.app.app_context():
