@@ -108,7 +108,7 @@
         {% endif %}
       </div>
       <div class="table-shell">
-        <table>
+        <table class="responsive-detail-table">
           <thead>
             <tr>
               <th>Periodo</th>
@@ -126,7 +126,7 @@
           <tbody>
             {% for summary in summaries %}
               <tr>
-                <td>
+                <td data-label="Periodo">
                   <a href="{{ url_for('period_detail', period_id=summary.period.id) }}">{{ summary.period.name }}</a>
                   {% if summary.period.is_open %}
                     <span class="pill">Abierto</span>
@@ -135,24 +135,24 @@
                     <span class="badge badge-warning">Revisar</span>
                   {% endif %}
                 </td>
-                <td>{{ summary.period.effective_start }} a {{ summary.period.effective_end }}</td>
-                <td>{{ summary.inverter_consumption_kwh | kwh }} kWh</td>
-                <td>
+                <td data-label="Rango">{{ summary.period.effective_start }} a {{ summary.period.effective_end }}</td>
+                <td data-label="Red">{{ summary.inverter_consumption_kwh | kwh }} kWh</td>
+                <td data-label="Compania">
                   {% if summary.utility_consumption_kwh is not none %}
                     {{ summary.utility_consumption_kwh | kwh }} kWh
                   {% else %}
                     Sin dato
                   {% endif %}
                 </td>
-                <td>{{ summary.billing_consumption_kwh | kwh }} kWh</td>
-                <td>
+                <td data-label="Facturable">{{ summary.billing_consumption_kwh | kwh }} kWh</td>
+                <td data-label="Medicion">
                   <strong>{{ 'Revisar' if summary.has_inverter_issue else 'OK' }}</strong><br>
                   <small>{{ summary.inverter_issue_summary }}</small>
                 </td>
-                <td>{{ summary.energy_cost | money }}</td>
-                <td>{{ summary.service_total | money }}</td>
-                <td>{{ summary.other_concepts_total | money }}</td>
-                <td><strong>{{ summary.total | money }}</strong></td>
+                <td data-label="Energia electrica">{{ summary.energy_cost | money }}</td>
+                <td data-label="Total servicio">{{ summary.service_total | money }}</td>
+                <td data-label="IVA y otros">{{ summary.other_concepts_total | money }}</td>
+                <td data-label="Total"><strong>{{ summary.total | money }}</strong></td>
               </tr>
             {% endfor %}
           </tbody>
