@@ -342,14 +342,6 @@ body.sidebar-collapsed .sidebar-user-meta {
   display: none;
 }
 
-body.sidebar-hidden .topbar-authenticated .topbar-brand {
-  display: block;
-}
-
-body.sidebar-hidden .topbar-authenticated {
-  justify-content: space-between;
-}
-
 .eyebrow {
   margin: 0;
   color: var(--accent);
@@ -1472,9 +1464,37 @@ code {
     transform: translateX(0);
   }
 
-  .sidebar-hide-button,
-  .sidebar-show-button {
+  .sidebar-collapse-toggle {
     display: none !important;
+  }
+
+  body.sidebar-collapsed .app-shell-authenticated {
+    grid-template-columns: 1fr;
+  }
+
+  body.sidebar-collapsed .sidebar-brand {
+    display: grid;
+  }
+
+  body.sidebar-collapsed .sidebar-link,
+  body.sidebar-collapsed .sidebar-action-button {
+    justify-content: flex-start;
+    padding: 0 16px;
+    gap: 12px;
+  }
+
+  body.sidebar-collapsed .sidebar-link-text,
+  body.sidebar-collapsed .sidebar-action-text {
+    display: inline-flex;
+  }
+
+  body.sidebar-collapsed .sidebar-user {
+    justify-content: flex-start;
+    padding: 8px 12px;
+  }
+
+  body.sidebar-collapsed .sidebar-user-meta {
+    display: flex;
   }
 
   .topbar-authenticated {

@@ -4,10 +4,9 @@
   var navToggle = document.querySelector("[data-nav-toggle]");
   var navBackdrop = document.querySelector("[data-nav-backdrop]");
   var installButton = document.querySelector("[data-install-button]");
-  var sidebarHideButton = document.querySelector("[data-sidebar-hide]");
-  var sidebarShowButton = document.querySelector("[data-sidebar-show]");
+  var sidebarCollapseButton = document.querySelector("[data-sidebar-collapse]");
   var compactNavQuery = window.matchMedia("(max-width: 1080px)");
-  var sidebarHiddenKey = "sa-costs-sidebar-hidden";
+  var sidebarCollapsedKey = "sa-costs-sidebar-collapsed";
   var chartMode = "area";
   var chartEntries = [];
 
@@ -44,26 +43,25 @@
     }
   }
 
-  function setSidebarHidden(hidden) {
+  function setSidebarCollapsed(collapsed) {
     if (isCompactNav()) {
       return;
     }
-    document.body.classList.toggle("sidebar-hidden", hidden);
-    if (sidebarShowButton) {
-      sidebarShowButton.hidden = !hidden;
+    document.body.classList.toggle("sidebar-collapsed", collapsed);
+    if (sidebarCollapseButton) {
+      sidebarCollapseButton.setAttribute("aria-label", collapsed ? "Expandir menu" : "Colapsar menu");
+      sidebarCollapseButton.setAttribute("title", collapsed ? "Expandir menu" : "Colapsar menu");
+      sidebarCollapseButton.setAttribute("aria-expanded", collapsed ? "false" : "true");
     }
-    window.localStorage.setItem(sidebarHiddenKey, hidden ? "1" : "0");
+    window.localStorage.setItem(sidebarCollapsedKey, collapsed ? "1" : "0");
   }
 
-  function restoreSidebarHiddenPreference() {
+  function restoreSidebarCollapsedPreference() {
     if (isCompactNav()) {
-      document.body.classList.remove("sidebar-hidden");
-      if (sidebarShowButton) {
-        sidebarShowButton.hidden = true;
-      }
+      document.body.classList.remove("sidebar-collapsed");
       return;
     }
-    setSidebarHidden(window.localStorage.getItem(sidebarHiddenKey) === "1");
+    setSidebarCollapsed(window.localStorage.getItem(sidebarCollapsedKey) === "1");
   }
 
   function formatNumber(value, decimals) {
@@ -292,17 +290,13 @@
     });
   }
 
-  if (sidebarHideButton) {
-    sidebarHideButton.addEventListener("click", function () {
-      setSidebarHidden(true);
-      window.requestAnimationFrame(renderCharts);
-    });
-  }
-
-  if (sidebarShowButton) {
-    sidebarShowButton.addEventListener("click", function () {
-      setSidebarHidden(false);
-      window.requestAnimationFrame(renderCharts);
+  if (sidebarCollapseButton) {
+    sidebarCollapseButton.addEventListener("click", function () {
+      if (isCompactNav()) {
+        return;
+      }
+      setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed"));
+      window.setTimeout(renderCharts, 240);
     });
   }
 
@@ -348,12 +342,12 @@
 
   window.addEventListener("resize", function () {
     syncNavState();
-    restoreSidebarHiddenPreference();
+    restoreSidebarCollapsedPreference();
     renderCharts();
   });
 
   syncNavState();
-  restoreSidebarHiddenPreference();
+  restoreSidebarCollapsedPreference();
 
   window.addEventListener("beforeinstallprompt", function (event) {
     event.preventDefault();
