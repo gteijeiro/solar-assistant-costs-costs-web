@@ -121,6 +121,14 @@ def format_period_axis_label(period: dict[str, Any]) -> str:
     return f"{MONTH_ABBR_ES[start_date.month - 1]} {start_date.year}"
 
 
+def format_day_axis_label(raw_date: str) -> str:
+    try:
+        parsed = date.fromisoformat(str(raw_date))
+    except ValueError:
+        return str(raw_date)
+    return parsed.strftime("%d/%m")
+
+
 def format_datetime_value(value: Any) -> str:
     text = str(value or "").strip()
     if not text:
@@ -514,12 +522,16 @@ def create_app(config: WebConfig) -> Flask:
             (item for item in dashboard_data.summaries if item["period"]["id"] == period_id),
             None,
         )
+        daily_cost_chart = build_period_daily_cost_chart(summary)
+        daily_energy_chart = build_period_daily_energy_chart(summary)
 
         return render_template(
             "period_detail.html",
             period=period,
             summary=summary,
             period_comparison=build_period_consumption_comparison(summary),
+            daily_cost_chart=daily_cost_chart,
+            daily_energy_chart=daily_energy_chart,
             bridge_status=dashboard_data.bridge_data.status if dashboard_data.bridge_data else None,
             bridge_error=dashboard_data.bridge_error,
             period_bands=repo.list_tariff_bands(scope="period", billing_period_id=period_id),
@@ -881,6 +893,62 @@ def build_consumption_chart(comparison_data: ConsumptionComparisonData) -> Toggl
                 "color": "#facc15",
                 "fill": "rgba(250, 204, 21, 0.18)",
                 "values": [float(item["solar_pv_kwh"]) for item in comparison_data.items],
+            },
+        ],
+        value_kind="kwh",
+    )
+
+
+def build_period_daily_cost_chart(summary: dict[str, Any] | None) -> ToggleChartData | None:
+    if summary is None:
+        return None
+
+    rows = summary.get("daily_energy_cost_breakdown") or []
+    if not rows:
+        return None
+
+    return build_toggle_chart(
+        title="Costo diario de energia",
+        subtitle=str(summary.get("daily_cost_note") or "Visualiza el costo diario calculado de la energia."),
+        labels=[format_day_axis_label(str(item["date"])) for item in rows],
+        full_labels=[str(item["date"]) for item in rows],
+        datasets=[
+            {
+                "label": "Costo energia",
+                "color": "#16a34a",
+                "fill": "rgba(22, 163, 74, 0.18)",
+                "values": [float(item.get("energy_cost") or 0.0) for item in rows],
+            }
+        ],
+        value_kind="money",
+    )
+
+
+def build_period_daily_energy_chart(summary: dict[str, Any] | None) -> ToggleChartData | None:
+    if summary is None:
+        return None
+
+    rows = summary.get("daily_energy_cost_breakdown") or []
+    if not rows:
+        return None
+
+    return build_toggle_chart(
+        title="Red y Solar PV por dia",
+        subtitle="Compara el consumo diario de red del inversor y la generacion solar del periodo.",
+        labels=[format_day_axis_label(str(item["date"])) for item in rows],
+        full_labels=[str(item["date"]) for item in rows],
+        datasets=[
+            {
+                "label": "Red inversor",
+                "color": "#ef4444",
+                "fill": "rgba(239, 68, 68, 0.18)",
+                "values": [float(item.get("inverter_grid_kwh") or 0.0) for item in rows],
+            },
+            {
+                "label": "Solar PV",
+                "color": "#facc15",
+                "fill": "rgba(250, 204, 21, 0.18)",
+                "values": [float(item.get("solar_pv_kwh") or 0.0) for item in rows],
             },
         ],
         value_kind="kwh",

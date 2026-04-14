@@ -29,27 +29,27 @@
           <strong>{{ current_summary.period.name }}</strong>
           <span>{{ current_summary.period.effective_start }} a {{ current_summary.period.effective_end }}</span>
         </article>
-        <article class="metric-card metric-card-invoice">
+        <article class="metric-card metric-card-money">
           <span class="metric-label">Costo total factura</span>
           <strong>{{ current_summary.total | money }}</strong>
           <span>Servicio + IVA y otros conceptos</span>
         </article>
-        <article class="metric-card metric-card-service">
+        <article class="metric-card metric-card-money">
           <span class="metric-label">Costo total energia</span>
           <strong>{{ current_summary.service_total | money }}</strong>
           <span>Energia + cargos y formulas de servicio</span>
         </article>
-        <article class="metric-card metric-card-energy">
+        <article class="metric-card metric-card-money">
           <span class="metric-label">Energia electrica</span>
           <strong>{{ current_summary.energy_cost | money }}</strong>
           <span>Tarifa {{ current_summary.config_source.bands_scope }}</span>
         </article>
-        <article class="metric-card metric-card-usage">
+        <article class="metric-card metric-card-kwh">
           <span class="metric-label">Red</span>
           <strong>{{ current_summary.inverter_consumption_kwh | kwh }} kWh</strong>
           <span>{{ current_summary.daily_points | length }} dias con registro</span>
         </article>
-        <article class="metric-card metric-card-company">
+        <article class="metric-card metric-card-kwh">
           <span class="metric-label">Compania</span>
           <strong>{% if current_summary.utility_consumption_kwh is not none %}{{ current_summary.utility_consumption_kwh | kwh }} kWh{% else %}Sin dato{% endif %}</strong>
           <span>
@@ -60,7 +60,7 @@
             {% endif %}
           </span>
         </article>
-        <article class="metric-card metric-card-billing">
+        <article class="metric-card metric-card-kwh">
           <span class="metric-label">Consumo facturable</span>
           <strong>{{ current_summary.billing_consumption_kwh | kwh }} kWh</strong>
           <span>{% if current_summary.consumption_source == 'utility' %}Tomado de la compania{% else %}Tomado de la red del inversor{% endif %}</span>

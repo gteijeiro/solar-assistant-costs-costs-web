@@ -757,5 +757,54 @@
         </table>
       </div>
     </section>
+
+    {% if daily_cost_chart or daily_energy_chart %}
+      <section class="panel chart-collection">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Graficos diarios</p>
+            <h2>Evolucion diaria</h2>
+            <p>Visualiza el costo diario y el comportamiento de la red del inversor junto a la generacion solar.</p>
+          </div>
+        </div>
+        <div class="chart-grid">
+          {% if daily_cost_chart %}
+            <article class="chart-card">
+              <div class="chart-card-header">
+                <div>
+                  <h3>{{ daily_cost_chart.title }}</h3>
+                  <p>{{ daily_cost_chart.subtitle }}</p>
+                </div>
+                <div class="chart-legend">
+                  {% for item in daily_cost_chart.legend %}
+                    <span class="legend-chip"><span class="legend-swatch" style="background: {{ item.color }}"></span>{{ item.label }}</span>
+                  {% endfor %}
+                </div>
+              </div>
+              <div class="echart-root" data-echart data-chart-config-id="daily-cost-chart-config"></div>
+              <script id="daily-cost-chart-config" type="application/json">{{ daily_cost_chart.config | tojson }}</script>
+            </article>
+          {% endif %}
+
+          {% if daily_energy_chart %}
+            <article class="chart-card">
+              <div class="chart-card-header">
+                <div>
+                  <h3>{{ daily_energy_chart.title }}</h3>
+                  <p>{{ daily_energy_chart.subtitle }}</p>
+                </div>
+                <div class="chart-legend">
+                  {% for item in daily_energy_chart.legend %}
+                    <span class="legend-chip"><span class="legend-swatch" style="background: {{ item.color }}"></span>{{ item.label }}</span>
+                  {% endfor %}
+                </div>
+              </div>
+              <div class="echart-root" data-echart data-chart-config-id="daily-energy-chart-config"></div>
+              <script id="daily-energy-chart-config" type="application/json">{{ daily_energy_chart.config | tojson }}</script>
+            </article>
+          {% endif %}
+        </div>
+      </section>
+    {% endif %}
   {% endif %}
 {% endblock %}
