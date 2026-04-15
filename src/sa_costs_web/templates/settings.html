@@ -28,6 +28,121 @@
     </article>
   </section>
 
+  <section class="two-column-grid">
+    <article class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Respaldo</p>
+          <h2>Exportar configuracion</h2>
+        </div>
+      </div>
+      <p>
+        Descarga un archivo JSON con plantillas, periodos y reglas especificas aplicadas en cada periodo.
+      </p>
+      <a class="primary-button" href="{{ url_for('export_settings') }}">Descargar backup JSON</a>
+    </article>
+
+    <article class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Restauracion</p>
+          <h2>Importar configuracion</h2>
+        </div>
+      </div>
+      <p>
+        Sube un backup JSON, revisa su contenido y luego elige que secciones o periodos quieres aplicar.
+        Lo que desmarques se conserva tal como esta actualmente.
+      </p>
+      <form method="post" action="{{ url_for('preview_import_settings') }}" enctype="multipart/form-data" class="stack-form">
+        <label>
+          Archivo JSON exportado
+          <input type="file" name="config_file" accept="application/json,.json" required>
+        </label>
+        <button type="submit" class="danger-button">Previsualizar importacion</button>
+      </form>
+    </article>
+  </section>
+
+  {% if import_preview %}
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Previsualizacion</p>
+          <h2>Selecciona que importar</h2>
+        </div>
+        {% if import_preview.exported_at %}
+          <span class="pill">Exportado: {{ import_preview.exported_at | datetime_local }}</span>
+        {% endif %}
+      </div>
+      <p>
+        Las plantillas marcadas reemplazaran solo esa seccion. Cada periodo marcado se creara o actualizara segun
+        su fecha de inicio. Los elementos desmarcados no se modifican.
+      </p>
+
+      <form method="post" action="{{ url_for('apply_import_settings') }}" class="stack-form">
+        <textarea name="payload_json" hidden>{{ import_preview.payload_json }}</textarea>
+
+        <div class="list-stack compact">
+          {% for section in import_preview.sections %}
+            <label class="list-card">
+              <span class="checkbox-label">
+                <input
+                  type="checkbox"
+                  name="{{ section.field }}"
+                  {% if section.checked and section.count %}checked{% endif %}
+                  {% if not section.count %}disabled{% endif %}
+                >
+                <span>
+                  <strong>{{ section.title }}</strong>
+                  <small class="muted">{{ section.description }}</small>
+                </span>
+              </span>
+              <span class="pill">{{ section.count }} items</span>
+            </label>
+          {% endfor %}
+        </div>
+
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Periodos</p>
+            <h3>Periodos incluidos en el backup</h3>
+          </div>
+        </div>
+
+        <div class="list-stack compact">
+          {% for period in import_preview.periods %}
+            <label class="list-card">
+              <span class="checkbox-label">
+                <input type="checkbox" name="selected_period_starts_on" value="{{ period.starts_on }}" checked>
+                <span>
+                  <strong>{{ period.name }}</strong>
+                  <small class="muted">
+                    Inicio {{ period.starts_on }}.
+                    {% if period.exists_locally %} Ya existe localmente y se actualizara.{% else %} Se creara como nuevo.{% endif %}
+                  </small>
+                  <small class="muted">
+                    {{ period.band_count }} franjas, {{ period.fixed_count }} cargos fijos, {{ period.tax_count }} conceptos calculados.
+                    {% if period.utility_measured_kwh is not none %} Medicion compania: {{ period.utility_measured_kwh | kwh }} kWh.{% endif %}
+                  </small>
+                </span>
+              </span>
+              {% if period.has_inverter_data_issue %}
+                <span class="badge badge-warning">Marca error inversor</span>
+              {% endif %}
+            </label>
+          {% else %}
+            <p class="muted">Este backup no contiene periodos.</p>
+          {% endfor %}
+        </div>
+
+        <div class="section-heading">
+          <button type="submit" class="primary-button">Importar seleccionados</button>
+          <a class="ghost-button" href="{{ url_for('settings') }}">Cancelar</a>
+        </div>
+      </form>
+    </section>
+  {% endif %}
+
   <section class="config-grid">
     <article class="panel">
       <div class="section-heading">

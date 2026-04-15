@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import dataclass
@@ -175,6 +176,16 @@ def create_app(config: WebConfig) -> Flask:
             "has_users": get_repo().user_count() > 0,
             "bridge_url": get_web_config().bridge_url,
         }
+
+    def render_settings_page(*, import_preview: dict[str, Any] | None = None) -> str:
+        repo = get_repo()
+        return render_template(
+            "settings.html",
+            template_bands=repo.list_tariff_bands(scope="default"),
+            default_fixed=repo.list_charge_rules(scope="default", kind="fixed"),
+            default_taxes=repo.list_charge_rules(scope="default", kind="tax"),
+            import_preview=import_preview,
+        )
 
     @app.before_request
     def require_setup_when_empty() -> Any:
@@ -367,13 +378,89 @@ def create_app(config: WebConfig) -> Flask:
     @app.route("/settings")
     @admin_required
     def settings() -> Any:
-        repo = get_repo()
-        return render_template(
-            "settings.html",
-            template_bands=repo.list_tariff_bands(scope="default"),
-            default_fixed=repo.list_charge_rules(scope="default", kind="fixed"),
-            default_taxes=repo.list_charge_rules(scope="default", kind="tax"),
+        return render_settings_page()
+
+    @app.route("/settings/export")
+    @admin_required
+    def export_settings() -> Any:
+        payload = get_repo().export_configuration()
+        response = Response(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            mimetype="application/json",
         )
+        response.headers["Content-Disposition"] = (
+            f'attachment; filename="sa-costs-web-config-{date.today().isoformat()}.json"'
+        )
+        return response
+
+    @app.route("/settings/import/preview", methods=["POST"])
+    @admin_required
+    def preview_import_settings() -> Any:
+        uploaded_file = request.files.get("config_file")
+        if uploaded_file is None or not str(uploaded_file.filename or "").strip():
+            flash("Selecciona un archivo JSON para importar.", "error")
+            return redirect(url_for("settings"))
+
+        try:
+            payload = json.loads(uploaded_file.read().decode("utf-8"))
+            prepared_payload = get_repo().prepare_configuration_import(payload)
+        except UnicodeDecodeError:
+            flash("El archivo importado debe estar codificado en UTF-8.", "error")
+            return redirect(url_for("settings"))
+        except json.JSONDecodeError as exc:
+            flash(f"El archivo JSON no es valido: {exc.msg}.", "error")
+            return redirect(url_for("settings"))
+        except Exception as exc:  # noqa: BLE001
+            flash(f"No se pudo leer la configuracion importada: {exc}", "error")
+            return redirect(url_for("settings"))
+
+        return render_settings_page(
+            import_preview=build_import_preview_data(prepared_payload),
+        )
+
+    @app.route("/settings/import/apply", methods=["POST"])
+    @admin_required
+    def apply_import_settings() -> Any:
+        payload_json = str(request.form.get("payload_json") or "").strip()
+        if not payload_json:
+            flash("La previsualizacion de importacion expiro. Vuelve a subir el archivo.", "error")
+            return redirect(url_for("settings"))
+
+        try:
+            payload = json.loads(payload_json)
+            prepared_payload = get_repo().prepare_configuration_import(payload)
+        except json.JSONDecodeError as exc:
+            flash(f"El archivo JSON no es valido: {exc.msg}.", "error")
+            return redirect(url_for("settings"))
+        except Exception as exc:  # noqa: BLE001
+            flash(f"No se pudo validar la configuracion importada: {exc}", "error")
+            return redirect(url_for("settings"))
+
+        include_default_bands = request.form.get("include_default_bands") == "on"
+        include_default_fixed = request.form.get("include_default_fixed") == "on"
+        include_default_taxes = request.form.get("include_default_taxes") == "on"
+        selected_period_starts_on = {
+            str(value).strip()
+            for value in request.form.getlist("selected_period_starts_on")
+            if str(value).strip()
+        }
+
+        try:
+            result = get_repo().import_configuration(
+                prepared_payload,
+                include_default_bands=include_default_bands,
+                include_default_fixed=include_default_fixed,
+                include_default_taxes=include_default_taxes,
+                selected_period_starts_on=selected_period_starts_on,
+            )
+        except Exception as exc:  # noqa: BLE001
+            flash(f"No se pudo importar la configuracion: {exc}", "error")
+            return render_settings_page(
+                import_preview=build_import_preview_data(prepared_payload),
+            )
+
+        flash(build_import_result_message(result), "success")
+        return redirect(url_for("settings"))
 
     @app.route("/settings/bands/save", methods=["POST"])
     @admin_required
@@ -760,6 +847,73 @@ def flash_fixed_charge_seed_result(result: SeedResult) -> None:
         "El periodo se guardo, pero no hay una plantilla ni otro mes con cargos fijos para copiar.",
         "error",
     )
+
+
+def build_import_preview_data(prepared_payload: dict[str, Any]) -> dict[str, Any]:
+    data = prepared_payload.get("data") if isinstance(prepared_payload, dict) else {}
+    defaults = data.get("defaults") if isinstance(data, dict) else {}
+    periods = data.get("periods") if isinstance(data, dict) else []
+    local_periods = get_repo().list_billing_periods(ascending=True)
+    existing_starts_on = {str(period.get("starts_on") or "") for period in local_periods}
+
+    return {
+        "exported_at": str(prepared_payload.get("exported_at") or ""),
+        "payload_json": json.dumps(prepared_payload, ensure_ascii=False),
+        "sections": [
+            {
+                "field": "include_default_bands",
+                "title": "Plantilla de tarifa por consumo",
+                "description": "Reemplaza las franjas base actuales por las del archivo.",
+                "count": len(defaults.get("tariff_bands") or []),
+                "checked": bool(defaults.get("tariff_bands")),
+            },
+            {
+                "field": "include_default_fixed",
+                "title": "Plantilla de importes fijos",
+                "description": "Reemplaza los cargos fijos base actuales por los del archivo.",
+                "count": len(defaults.get("fixed_charges") or []),
+                "checked": bool(defaults.get("fixed_charges")),
+            },
+            {
+                "field": "include_default_taxes",
+                "title": "Conceptos calculados",
+                "description": "Reemplaza las reglas por formula base actuales por las del archivo.",
+                "count": len(defaults.get("tax_rules") or []),
+                "checked": bool(defaults.get("tax_rules")),
+            },
+        ],
+        "periods": [
+            {
+                "name": str(period.get("name") or ""),
+                "starts_on": str(period.get("starts_on") or ""),
+                "utility_measured_kwh": period.get("utility_measured_kwh"),
+                "has_inverter_data_issue": bool(period.get("has_inverter_data_issue", False)),
+                "billing_source": str(period.get("billing_source") or "inverter"),
+                "band_count": len(period.get("tariff_bands") or []),
+                "fixed_count": len(period.get("fixed_charges") or []),
+                "tax_count": len(period.get("tax_rules") or []),
+                "exists_locally": str(period.get("starts_on") or "") in existing_starts_on,
+            }
+            for period in periods
+        ],
+    }
+
+
+def build_import_result_message(result: dict[str, int]) -> str:
+    parts: list[str] = []
+    if result.get("default_bands_replaced"):
+        parts.append("plantilla de tarifas actualizada")
+    if result.get("default_fixed_replaced"):
+        parts.append("plantilla de cargos fijos actualizada")
+    if result.get("default_taxes_replaced"):
+        parts.append("conceptos calculados actualizados")
+    if result.get("periods_created"):
+        parts.append(f"{result['periods_created']} periodos creados")
+    if result.get("periods_updated"):
+        parts.append(f"{result['periods_updated']} periodos actualizados")
+    if not parts:
+        return "No se selecciono ningun elemento para importar."
+    return "Importacion aplicada: " + ", ".join(parts) + "."
 
 
 def build_dashboard_data(periods: list[dict[str, Any]]) -> DashboardData:

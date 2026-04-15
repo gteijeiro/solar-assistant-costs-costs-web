@@ -226,6 +226,236 @@ class CostsRepository:
                 (1 if enabled else 0, user_id),
             )
 
+    def export_configuration(self) -> dict[str, Any]:
+        periods = self.list_billing_periods(ascending=True)
+        return {
+            "format": "sa-costs-web-config",
+            "schema_version": 2,
+            "exported_at": utc_now(),
+            "data": {
+                "defaults": {
+                    "tariff_bands": [self._serialize_tariff_band(item) for item in self.list_tariff_bands(scope="default")],
+                    "fixed_charges": [
+                        self._serialize_charge_rule(item)
+                        for item in self.list_charge_rules(scope="default", kind="fixed")
+                    ],
+                    "tax_rules": [
+                        self._serialize_charge_rule(item)
+                        for item in self.list_charge_rules(scope="default", kind="tax")
+                    ],
+                },
+                "periods": [
+                    {
+                        "name": str(period.get("name") or ""),
+                        "starts_on": str(period.get("starts_on") or ""),
+                        "utility_measured_kwh": (
+                            float(period["utility_measured_kwh"])
+                            if period.get("utility_measured_kwh") is not None
+                            else None
+                        ),
+                        "has_inverter_data_issue": bool(period.get("has_inverter_data_issue", 0)),
+                        "billing_source": str(period.get("billing_source") or "inverter"),
+                        "notes": str(period.get("notes") or ""),
+                        "tariff_bands": [
+                            self._serialize_tariff_band(item)
+                            for item in self.list_tariff_bands(scope="period", billing_period_id=int(period["id"]))
+                        ],
+                        "fixed_charges": [
+                            self._serialize_charge_rule(item)
+                            for item in self.list_charge_rules(
+                                scope="period",
+                                kind="fixed",
+                                billing_period_id=int(period["id"]),
+                            )
+                        ],
+                        "tax_rules": [
+                            self._serialize_charge_rule(item)
+                            for item in self.list_charge_rules(
+                                scope="period",
+                                kind="tax",
+                                billing_period_id=int(period["id"]),
+                            )
+                        ],
+                    }
+                    for period in periods
+                ],
+            },
+        }
+
+    def prepare_configuration_import(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(payload, dict):
+            raise ValueError("El archivo debe contener un objeto JSON valido.")
+        if str(payload.get("format") or "") != "sa-costs-web-config":
+            raise ValueError("El archivo no corresponde a una exportacion valida de Energy Costs.")
+        schema_version = int(payload.get("schema_version") or 0)
+        if schema_version not in {1, 2}:
+            raise ValueError("La version del archivo no es compatible con esta aplicacion.")
+
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise ValueError("El archivo no contiene datos de configuracion.")
+
+        defaults = self._normalize_import_defaults(data.get("defaults"))
+        periods = self._normalize_import_periods(data.get("periods"))
+
+        return {
+            "format": "sa-costs-web-config",
+            "schema_version": schema_version,
+            "exported_at": str(payload.get("exported_at") or ""),
+            "data": {
+                "defaults": defaults,
+                "periods": periods,
+            },
+        }
+
+    def import_configuration(
+        self,
+        prepared_payload: dict[str, Any],
+        *,
+        include_default_bands: bool,
+        include_default_fixed: bool,
+        include_default_taxes: bool,
+        selected_period_starts_on: set[str],
+    ) -> dict[str, int]:
+        data = prepared_payload.get("data")
+        if not isinstance(data, dict):
+            raise ValueError("La configuracion importada no es valida.")
+
+        defaults = data.get("defaults")
+        periods = data.get("periods")
+        if not isinstance(defaults, dict) or not isinstance(periods, list):
+            raise ValueError("La configuracion importada no es valida.")
+
+        selected_period_keys = {str(item).strip() for item in selected_period_starts_on if str(item).strip()}
+        if not any([include_default_bands, include_default_fixed, include_default_taxes, selected_period_keys]):
+            raise ValueError("Selecciona al menos una seccion o un periodo para importar.")
+
+        result = {
+            "default_bands_replaced": 0,
+            "default_fixed_replaced": 0,
+            "default_taxes_replaced": 0,
+            "periods_created": 0,
+            "periods_updated": 0,
+        }
+
+        with self._connection() as conn:
+            if include_default_bands:
+                conn.execute("DELETE FROM tariff_bands WHERE scope = 'default'")
+                for band in defaults.get("tariff_bands", []):
+                    self._insert_tariff_band(conn, scope="default", billing_period_id=None, band=band)
+                result["default_bands_replaced"] = len(defaults.get("tariff_bands", []))
+
+            if include_default_fixed:
+                conn.execute("DELETE FROM charge_rules WHERE scope = 'default' AND kind = 'fixed'")
+                for rule in defaults.get("fixed_charges", []):
+                    self._insert_charge_rule(
+                        conn,
+                        scope="default",
+                        billing_period_id=None,
+                        kind="fixed",
+                        rule=rule,
+                    )
+                result["default_fixed_replaced"] = len(defaults.get("fixed_charges", []))
+
+            if include_default_taxes:
+                conn.execute("DELETE FROM charge_rules WHERE scope = 'default' AND kind = 'tax'")
+                for rule in defaults.get("tax_rules", []):
+                    self._insert_charge_rule(
+                        conn,
+                        scope="default",
+                        billing_period_id=None,
+                        kind="tax",
+                        rule=rule,
+                    )
+                result["default_taxes_replaced"] = len(defaults.get("tax_rules", []))
+
+            for period in periods:
+                starts_on = str(period.get("starts_on") or "")
+                if starts_on not in selected_period_keys:
+                    continue
+
+                existing_row = conn.execute(
+                    "SELECT id FROM billing_periods WHERE starts_on = ?",
+                    (starts_on,),
+                ).fetchone()
+
+                if existing_row is None:
+                    cursor = conn.execute(
+                        """
+                        INSERT INTO billing_periods (
+                            name, starts_on, utility_measured_kwh, has_inverter_data_issue, billing_source, notes, created_at, updated_at
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            period["name"],
+                            period["starts_on"],
+                            period["utility_measured_kwh"],
+                            1 if period["has_inverter_data_issue"] else 0,
+                            period["billing_source"],
+                            period["notes"],
+                            utc_now(),
+                            utc_now(),
+                        ),
+                    )
+                    period_id = int(cursor.lastrowid)
+                    result["periods_created"] += 1
+                else:
+                    period_id = int(existing_row["id"])
+                    conn.execute(
+                        """
+                        UPDATE billing_periods
+                        SET name = ?, utility_measured_kwh = ?, has_inverter_data_issue = ?, billing_source = ?, notes = ?, updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            period["name"],
+                            period["utility_measured_kwh"],
+                            1 if period["has_inverter_data_issue"] else 0,
+                            period["billing_source"],
+                            period["notes"],
+                            utc_now(),
+                            period_id,
+                        ),
+                    )
+                    conn.execute(
+                        "DELETE FROM tariff_bands WHERE scope = 'period' AND billing_period_id = ?",
+                        (period_id,),
+                    )
+                    conn.execute(
+                        "DELETE FROM charge_rules WHERE scope = 'period' AND billing_period_id = ?",
+                        (period_id,),
+                    )
+                    result["periods_updated"] += 1
+
+                for band in period["tariff_bands"]:
+                    self._insert_tariff_band(
+                        conn,
+                        scope="period",
+                        billing_period_id=period_id,
+                        band=band,
+                    )
+
+                for rule in period["fixed_charges"]:
+                    self._insert_charge_rule(
+                        conn,
+                        scope="period",
+                        billing_period_id=period_id,
+                        kind="fixed",
+                        rule=rule,
+                    )
+
+                for rule in period["tax_rules"]:
+                    self._insert_charge_rule(
+                        conn,
+                        scope="period",
+                        billing_period_id=period_id,
+                        kind="tax",
+                        rule=rule,
+                    )
+
+        return result
+
     def list_billing_periods(self, *, ascending: bool = False) -> list[dict[str, Any]]:
         direction = "ASC" if ascending else "DESC"
         with self._connection() as conn:
@@ -612,3 +842,241 @@ class CostsRepository:
         if period_rules:
             return period_rules
         return self.list_charge_rules(scope="default", kind="tax")
+
+    @staticmethod
+    def _serialize_tariff_band(band: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "position": int(band.get("position") or 0),
+            "label": str(band.get("label") or ""),
+            "from_kwh": float(band.get("from_kwh") or 0.0),
+            "to_kwh": float(band["to_kwh"]) if band.get("to_kwh") is not None else None,
+            "price_per_kwh": float(band.get("price_per_kwh") or 0.0),
+        }
+
+    @staticmethod
+    def _serialize_charge_rule(rule: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "position": int(rule.get("position") or 0),
+            "section": str(rule.get("section") or ("service" if rule.get("kind") == "fixed" else "tax")),
+            "name": str(rule.get("name") or ""),
+            "alias": str(rule["alias"]) if rule.get("alias") not in (None, "") else None,
+            "expression": str(rule["expression"]) if rule.get("expression") not in (None, "") else None,
+            "amount": float(rule["amount"]) if rule.get("amount") is not None else None,
+            "show_on_dashboard": bool(rule.get("show_on_dashboard", 0)),
+            "enabled": bool(rule.get("enabled", 1)),
+        }
+
+    @staticmethod
+    def _coerce_bool(value: Any, *, default: bool) -> bool:
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        text = str(value).strip().lower()
+        if text in {"1", "true", "si", "sí", "yes", "on"}:
+            return True
+        if text in {"0", "false", "no", "off"}:
+            return False
+        return default
+
+    def _normalize_import_defaults(self, raw_defaults: Any) -> dict[str, list[dict[str, Any]]]:
+        defaults = raw_defaults if isinstance(raw_defaults, dict) else {}
+        return {
+            "tariff_bands": self._normalize_import_tariff_bands(defaults.get("tariff_bands"), context="plantilla"),
+            "fixed_charges": self._normalize_import_charge_rules(
+                defaults.get("fixed_charges"),
+                kind="fixed",
+                context="plantilla",
+            ),
+            "tax_rules": self._normalize_import_charge_rules(
+                defaults.get("tax_rules"),
+                kind="tax",
+                context="plantilla",
+            ),
+        }
+
+    def _normalize_import_periods(self, raw_periods: Any) -> list[dict[str, Any]]:
+        if raw_periods is None:
+            return []
+        if not isinstance(raw_periods, list):
+            raise ValueError("La lista de periodos importados no es valida.")
+
+        periods: list[dict[str, Any]] = []
+        starts_on_seen: set[str] = set()
+        for raw_period in raw_periods:
+            if not isinstance(raw_period, dict):
+                raise ValueError("Cada periodo importado debe ser un objeto JSON.")
+            name = str(raw_period.get("name") or "").strip()
+            starts_on = str(raw_period.get("starts_on") or "").strip()
+            billing_source = str(raw_period.get("billing_source") or "inverter").strip()
+            if not name:
+                raise ValueError("Todos los periodos importados deben tener nombre.")
+            if not starts_on:
+                raise ValueError(f"El periodo '{name}' no tiene fecha de inicio.")
+            if starts_on in starts_on_seen:
+                raise ValueError(f"El periodo con inicio {starts_on} esta repetido.")
+            if billing_source not in {"inverter", "utility"}:
+                raise ValueError(f"El periodo '{name}' tiene una fuente de calculo invalida.")
+            utility_measured_kwh = raw_period.get("utility_measured_kwh")
+            periods.append(
+                {
+                    "name": name,
+                    "starts_on": starts_on,
+                    "utility_measured_kwh": float(utility_measured_kwh) if utility_measured_kwh is not None else None,
+                    "has_inverter_data_issue": self._coerce_bool(
+                        raw_period.get("has_inverter_data_issue"),
+                        default=False,
+                    ),
+                    "billing_source": billing_source,
+                    "notes": str(raw_period.get("notes") or ""),
+                    "tariff_bands": self._normalize_import_tariff_bands(
+                        raw_period.get("tariff_bands"),
+                        context=f"periodo {name}",
+                    ),
+                    "fixed_charges": self._normalize_import_charge_rules(
+                        raw_period.get("fixed_charges"),
+                        kind="fixed",
+                        context=f"periodo {name}",
+                    ),
+                    "tax_rules": self._normalize_import_charge_rules(
+                        raw_period.get("tax_rules"),
+                        kind="tax",
+                        context=f"periodo {name}",
+                    ),
+                }
+            )
+            starts_on_seen.add(starts_on)
+        return sorted(periods, key=lambda item: (item["starts_on"], item["name"]))
+
+    def _normalize_import_tariff_bands(self, raw_bands: Any, *, context: str) -> list[dict[str, Any]]:
+        if raw_bands is None:
+            return []
+        if not isinstance(raw_bands, list):
+            raise ValueError(f"La lista de franjas para {context} no es valida.")
+
+        bands: list[dict[str, Any]] = []
+        for raw_band in raw_bands:
+            if not isinstance(raw_band, dict):
+                raise ValueError(f"Cada franja importada para {context} debe ser un objeto JSON.")
+            if raw_band.get("from_kwh") is None:
+                raise ValueError(f"Una franja de {context} no tiene 'from_kwh'.")
+            if raw_band.get("price_per_kwh") is None:
+                raise ValueError(f"Una franja de {context} no tiene 'price_per_kwh'.")
+            bands.append(
+                {
+                    "position": int(raw_band.get("position") or 0),
+                    "label": str(raw_band.get("label") or ""),
+                    "from_kwh": float(raw_band["from_kwh"]),
+                    "to_kwh": float(raw_band["to_kwh"]) if raw_band.get("to_kwh") is not None else None,
+                    "price_per_kwh": float(raw_band["price_per_kwh"]),
+                }
+            )
+        return sorted(bands, key=lambda item: (item["position"], item["from_kwh"], item["label"]))
+
+    def _normalize_import_charge_rules(
+        self,
+        raw_rules: Any,
+        *,
+        kind: str,
+        context: str,
+    ) -> list[dict[str, Any]]:
+        if raw_rules is None:
+            return []
+        if not isinstance(raw_rules, list):
+            raise ValueError(f"La lista de reglas para {context} no es valida.")
+
+        rules: list[dict[str, Any]] = []
+        for raw_rule in raw_rules:
+            if not isinstance(raw_rule, dict):
+                raise ValueError(f"Cada regla importada para {context} debe ser un objeto JSON.")
+            name = str(raw_rule.get("name") or "").strip()
+            section = str(raw_rule.get("section") or ("service" if kind == "fixed" else "tax")).strip()
+            if not name:
+                raise ValueError(f"Hay una regla de {context} sin nombre.")
+            if section not in {"service", "tax"}:
+                raise ValueError(f"La regla '{name}' de {context} tiene una seccion invalida.")
+            alias_value = raw_rule.get("alias")
+            expression_value = raw_rule.get("expression")
+            amount_value = raw_rule.get("amount")
+            expression = str(expression_value).strip() if expression_value not in (None, "") else None
+            amount = float(amount_value) if amount_value is not None else None
+            if kind == "fixed" and amount is None:
+                raise ValueError(f"La regla fija '{name}' de {context} no tiene importe.")
+            if kind == "tax" and not expression:
+                raise ValueError(f"La regla por formula '{name}' de {context} no tiene expresion.")
+            rules.append(
+                {
+                    "position": int(raw_rule.get("position") or 0),
+                    "section": section,
+                    "name": name,
+                    "alias": str(alias_value).strip() if alias_value not in (None, "") else None,
+                    "expression": expression if kind == "tax" else None,
+                    "amount": amount if kind == "fixed" else None,
+                    "show_on_dashboard": self._coerce_bool(raw_rule.get("show_on_dashboard"), default=False),
+                    "enabled": self._coerce_bool(raw_rule.get("enabled"), default=True),
+                }
+            )
+        return sorted(rules, key=lambda item: (item["position"], item["name"]))
+
+    @staticmethod
+    def _insert_tariff_band(
+        conn: sqlite3.Connection,
+        *,
+        scope: str,
+        billing_period_id: int | None,
+        band: dict[str, Any],
+    ) -> None:
+        conn.execute(
+            """
+            INSERT INTO tariff_bands (
+                scope, billing_period_id, position, label, from_kwh, to_kwh, price_per_kwh, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                scope,
+                billing_period_id,
+                int(band.get("position") or 0),
+                str(band.get("label") or ""),
+                float(band.get("from_kwh") or 0.0),
+                float(band["to_kwh"]) if band.get("to_kwh") is not None else None,
+                float(band.get("price_per_kwh") or 0.0),
+                utc_now(),
+                utc_now(),
+            ),
+        )
+
+    @staticmethod
+    def _insert_charge_rule(
+        conn: sqlite3.Connection,
+        *,
+        scope: str,
+        billing_period_id: int | None,
+        kind: str,
+        rule: dict[str, Any],
+    ) -> None:
+        conn.execute(
+            """
+            INSERT INTO charge_rules (
+                scope, billing_period_id, position, kind, section, name, alias, expression, amount, show_on_dashboard, enabled, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                scope,
+                billing_period_id,
+                int(rule.get("position") or 0),
+                kind,
+                str(rule.get("section") or ("service" if kind == "fixed" else "tax")),
+                str(rule.get("name") or ""),
+                str(rule["alias"]) if rule.get("alias") not in (None, "") else None,
+                str(rule["expression"]) if rule.get("expression") not in (None, "") else None,
+                float(rule["amount"]) if rule.get("amount") is not None else None,
+                1 if rule.get("show_on_dashboard", False) else 0,
+                1 if rule.get("enabled", True) else 0,
+                utc_now(),
+                utc_now(),
+            ),
+        )

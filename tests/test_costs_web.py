@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import io
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -377,6 +379,312 @@ class WebAppTests(unittest.TestCase):
         redirect_response = disabled_session_client.get("/", follow_redirects=True)
         self.assertEqual(redirect_response.status_code, 200)
         self.assertIn("usuario esta deshabilitado", redirect_response.get_data(as_text=True))
+
+    def test_admin_can_export_full_configuration_snapshot(self) -> None:
+        with self.app.app_context():
+            repo = self.app.extensions["repo"]
+            repo.create_user("viewer", generate_password_hash("viewer123"), role="viewer")
+            period_id = repo.save_billing_period(
+                period_id=None,
+                name="Factura junio 2026",
+                starts_on="2026-06-01",
+                utility_measured_kwh=145.2,
+                has_inverter_data_issue=True,
+                billing_source="utility",
+                notes="Snapshot export",
+            )
+            repo.save_tariff_band(
+                band_id=None,
+                scope="default",
+                billing_period_id=None,
+                position=1,
+                label="Base",
+                from_kwh=0.0,
+                to_kwh=120.0,
+                price_per_kwh=95.5,
+            )
+            repo.save_tariff_band(
+                band_id=None,
+                scope="period",
+                billing_period_id=period_id,
+                position=1,
+                label="Junio",
+                from_kwh=0.0,
+                to_kwh=None,
+                price_per_kwh=110.0,
+            )
+            repo.save_charge_rule(
+                rule_id=None,
+                scope="default",
+                billing_period_id=None,
+                position=1,
+                kind="fixed",
+                section="service",
+                name="Cargo fijo",
+                alias="cargo_fijo",
+                expression=None,
+                amount=3200.0,
+                show_on_dashboard=True,
+                enabled=True,
+            )
+            repo.save_charge_rule(
+                rule_id=None,
+                scope="period",
+                billing_period_id=period_id,
+                position=1,
+                kind="tax",
+                section="tax",
+                name="IVA 21",
+                alias="iva_21",
+                expression="21% de total_factura",
+                amount=None,
+                show_on_dashboard=False,
+                enabled=True,
+            )
+
+        response = self.client.get("/settings/export")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "application/json")
+        self.assertIn("attachment; filename=", response.headers.get("Content-Disposition", ""))
+
+        payload = json.loads(response.get_data(as_text=True))
+        self.assertEqual(payload["format"], "sa-costs-web-config")
+        self.assertEqual(payload["schema_version"], 2)
+        self.assertNotIn("users", payload["data"])
+        self.assertNotIn("password_hash", response.get_data(as_text=True))
+        self.assertEqual(payload["data"]["defaults"]["tariff_bands"][0]["label"], "Base")
+        self.assertEqual(payload["data"]["defaults"]["fixed_charges"][0]["name"], "Cargo fijo")
+        self.assertEqual(payload["data"]["periods"][0]["name"], "Factura junio 2026")
+        self.assertEqual(payload["data"]["periods"][0]["tariff_bands"][0]["label"], "Junio")
+        self.assertEqual(payload["data"]["periods"][0]["tax_rules"][0]["alias"], "iva_21")
+
+    def test_admin_can_preview_and_selectively_import_configuration(self) -> None:
+        with self.app.app_context():
+            repo = self.app.extensions["repo"]
+            repo.save_tariff_band(
+                band_id=None,
+                scope="default",
+                billing_period_id=None,
+                position=1,
+                label="Local base",
+                from_kwh=0.0,
+                to_kwh=80.0,
+                price_per_kwh=70.0,
+            )
+            repo.save_charge_rule(
+                rule_id=None,
+                scope="default",
+                billing_period_id=None,
+                position=1,
+                kind="fixed",
+                section="service",
+                name="Cargo local",
+                alias="cargo_local",
+                expression=None,
+                amount=1500.0,
+                show_on_dashboard=True,
+                enabled=True,
+            )
+            repo.save_charge_rule(
+                rule_id=None,
+                scope="default",
+                billing_period_id=None,
+                position=1,
+                kind="tax",
+                section="tax",
+                name="Impuesto local",
+                alias="impuesto_local",
+                expression="5% de total_factura",
+                amount=None,
+                show_on_dashboard=False,
+                enabled=True,
+            )
+            local_period_id = repo.save_billing_period(
+                period_id=None,
+                name="Factura febrero local",
+                starts_on="2026-02-01",
+                utility_measured_kwh=90.0,
+                has_inverter_data_issue=False,
+                billing_source="inverter",
+                notes="Existente",
+            )
+            repo.save_tariff_band(
+                band_id=None,
+                scope="period",
+                billing_period_id=local_period_id,
+                position=1,
+                label="Local febrero",
+                from_kwh=0.0,
+                to_kwh=None,
+                price_per_kwh=60.0,
+            )
+            repo.save_billing_period(
+                period_id=None,
+                name="Factura enero local",
+                starts_on="2026-01-01",
+                utility_measured_kwh=80.0,
+                has_inverter_data_issue=False,
+                billing_source="utility",
+                notes="Debe quedar intacto",
+            )
+
+        import_payload = {
+            "format": "sa-costs-web-config",
+            "schema_version": 2,
+            "exported_at": "2026-04-14T00:00:00+00:00",
+            "data": {
+                "defaults": {
+                    "tariff_bands": [
+                        {
+                            "position": 1,
+                            "label": "Residencial",
+                            "from_kwh": 0,
+                            "to_kwh": 120,
+                            "price_per_kwh": 88.25,
+                        }
+                    ],
+                    "fixed_charges": [
+                        {
+                            "position": 1,
+                            "section": "service",
+                            "name": "Cargo fijo",
+                            "alias": "cargo_fijo",
+                            "amount": 3150.46,
+                            "show_on_dashboard": True,
+                            "enabled": True,
+                        }
+                    ],
+                    "tax_rules": [
+                        {
+                            "position": 1,
+                            "section": "tax",
+                            "name": "IVA 21",
+                            "alias": "iva_21",
+                            "expression": "21% de total_factura",
+                            "enabled": True,
+                        }
+                    ],
+                },
+                "periods": [
+                    {
+                        "name": "Factura febrero 2026",
+                        "starts_on": "2026-02-01",
+                        "utility_measured_kwh": 178.4,
+                        "has_inverter_data_issue": True,
+                        "billing_source": "utility",
+                        "notes": "Importado desde backup",
+                        "tariff_bands": [
+                            {
+                                "position": 1,
+                                "label": "Mes actual",
+                                "from_kwh": 0,
+                                "to_kwh": None,
+                                "price_per_kwh": 102.0,
+                            }
+                        ],
+                        "fixed_charges": [
+                            {
+                                "position": 1,
+                                "section": "service",
+                                "name": "Cargo fijo febrero",
+                                "alias": "cargo_fijo_febrero",
+                                "amount": 4100.0,
+                                "show_on_dashboard": True,
+                                "enabled": True,
+                            }
+                        ],
+                        "tax_rules": [
+                            {
+                                "position": 1,
+                                "section": "tax",
+                                "name": "FODEP",
+                                "alias": "fondep",
+                                "expression": "(cargo_fijo_febrero + iva_21) * 0.1",
+                                "enabled": True,
+                            }
+                        ],
+                    },
+                    {
+                        "name": "Factura marzo 2026",
+                        "starts_on": "2026-03-01",
+                        "utility_measured_kwh": 190.1,
+                        "has_inverter_data_issue": False,
+                        "billing_source": "utility",
+                        "notes": "No se debe importar en esta prueba",
+                        "tariff_bands": [
+                            {
+                                "position": 1,
+                                "label": "Mes marzo",
+                                "from_kwh": 0,
+                                "to_kwh": None,
+                                "price_per_kwh": 104.5,
+                            }
+                        ],
+                        "fixed_charges": [],
+                        "tax_rules": [],
+                    }
+                ],
+            },
+        }
+
+        preview_response = self.client.post(
+            "/settings/import/preview",
+            data={
+                "config_file": (
+                    io.BytesIO(json.dumps(import_payload).encode("utf-8")),
+                    "backup.json",
+                )
+            },
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+
+        preview_html = preview_response.get_data(as_text=True)
+        self.assertEqual(preview_response.status_code, 200)
+        self.assertIn("Selecciona que importar", preview_html)
+        self.assertIn("Plantilla de tarifa por consumo", preview_html)
+        self.assertIn("Factura febrero 2026", preview_html)
+        self.assertIn("Factura marzo 2026", preview_html)
+
+        response = self.client.post(
+            "/settings/import/apply",
+            data={
+                "payload_json": json.dumps(import_payload),
+                "include_default_bands": "on",
+                "include_default_taxes": "on",
+                "selected_period_starts_on": ["2026-02-01"],
+            },
+            follow_redirects=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Importacion aplicada", response.get_data(as_text=True))
+
+        with self.app.app_context():
+            repo = self.app.extensions["repo"]
+            users = repo.list_users()
+            periods = repo.list_billing_periods(ascending=True)
+            default_bands = repo.list_tariff_bands(scope="default")
+            default_fixed = repo.list_charge_rules(scope="default", kind="fixed")
+            default_taxes = repo.list_charge_rules(scope="default", kind="tax")
+            imported_period = next(period for period in periods if period["starts_on"] == "2026-02-01")
+            untouched_period = next(period for period in periods if period["starts_on"] == "2026-01-01")
+            period_bands = repo.list_tariff_bands(scope="period", billing_period_id=imported_period["id"])
+            period_fixed = repo.list_charge_rules(scope="period", kind="fixed", billing_period_id=imported_period["id"])
+            period_taxes = repo.list_charge_rules(scope="period", kind="tax", billing_period_id=imported_period["id"])
+
+        self.assertEqual(len(users), 1)
+        self.assertEqual(default_bands[0]["label"], "Residencial")
+        self.assertEqual(default_fixed[0]["name"], "Cargo local")
+        self.assertEqual(default_taxes[0]["alias"], "iva_21")
+        self.assertEqual(imported_period["name"], "Factura febrero 2026")
+        self.assertEqual(imported_period["billing_source"], "utility")
+        self.assertEqual(untouched_period["name"], "Factura enero local")
+        self.assertEqual(period_bands[0]["label"], "Mes actual")
+        self.assertEqual(period_fixed[0]["alias"], "cargo_fijo_febrero")
+        self.assertEqual(period_taxes[0]["alias"], "fondep")
+        self.assertNotIn("Factura marzo 2026", [period["name"] for period in periods])
 
 
 if __name__ == "__main__":
