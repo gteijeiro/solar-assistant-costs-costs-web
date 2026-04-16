@@ -37,12 +37,13 @@ Aplicacion web en Python para calcular el costo de la luz consumiendo la API del
 ```bash
 sudo apt update
 sudo apt install -y python3-full python3-venv
-mkdir -p /opt/solarcost/web
+sudo mkdir -p /opt/solarcost/web
+sudo chown -R "$USER":"$USER" /opt/solarcost/web
 cd /opt/solarcost/web
 python3 -m venv .venv
 source .venv/bin/activate
-pip install --upgrade pip
-pip install solarcost-web
+python -m pip install --upgrade pip
+python -m pip install solarcost-web
 sudo "$(command -v sa_web)" init
 ```
 
@@ -62,7 +63,7 @@ Si quieres una desinstalacion conservando configuracion:
 
 ```bash
 source .venv/bin/activate
-pip uninstall solarcost-web
+python -m pip uninstall solarcost-web
 ```
 
 O con el asistente interactivo:
@@ -75,12 +76,6 @@ Si quieres tocar un servicio `system`, usa:
 
 ```bash
 sudo "$(command -v sa_web)" uninstall
-```
-
-Si instalaste desde el repo, tambien puedes usar:
-
-```bash
-./uninstall.sh
 ```
 
 Si quieres una desinstalacion limpia completa:
@@ -96,21 +91,9 @@ rm -f /ruta/a/data/energy_costs.sqlite3
 rm -rf /ruta/al/directorio/de/trabajo
 ```
 
-## Despliegue rapido en Raspberry Pi
+## Uso diario
 
-1. Asegurate de tener el bridge funcionando en la misma maquina o accesible por red.
-2. Clona el repo en la Pi.
-3. Entra a la carpeta del proyecto.
-4. Ejecuta `./init.sh`.
-5. Responde el asistente interactivo y apunta `SA_COSTS_BRIDGE_URL` al bridge, por ejemplo `http://127.0.0.1:8765`.
-
-Ejemplo:
-
-```bash
-git clone https://github.com/gteijeiro/solarcost-web.git
-cd solarcost-web
-./init.sh
-```
+El bridge debe estar funcionando antes de iniciar la web.
 
 Para ver logs:
 
@@ -118,119 +101,27 @@ Para ver logs:
 sudo journalctl -u solarcost-web.service -f
 ```
 
-## Ejecucion
-
-Primero asegúrate de tener el bridge levantado.
+Para reiniciarla:
 
 ```bash
-export SA_COSTS_BRIDGE_URL="http://127.0.0.1:8765"
-export SA_COSTS_SECRET_KEY="GENERA_AQUI_UN_SECRETO_LARGO_Y_UNICO"
-sa_web
+sudo systemctl restart solarcost-web.service
 ```
 
-Tambien puedes usar el subcomando explicito:
+Si prefieres ejecutarla manualmente:
 
 ```bash
+cd /opt/solarcost/web
+source .venv/bin/activate
 sa_web run
 ```
 
-La web queda por defecto en:
+La web queda por defecto en `http://127.0.0.1:8890`.
 
-- `http://127.0.0.1:8890`
-
-## Primer inicio
-
-- Al abrir la web por primera vez, si no existen usuarios, se muestra la pantalla de alta inicial.
-- Ese primer usuario queda como administrador.
-- Luego los administradores pueden crear mas usuarios, cambiar roles y deshabilitarlos.
-
-## Variables disponibles
-
-- `SA_COSTS_BRIDGE_URL`
-- `SA_COSTS_BIND_HOST`
-- `SA_COSTS_BIND_PORT`
-- `SA_COSTS_DB_PATH`
-- `SA_COSTS_SECRET_KEY`
-- `SA_COSTS_LOG_LEVEL`
-- `SA_COSTS_HTTP_TIMEOUT`
-
-## Recomendacion de seguridad
-
-- No subas `SA_COSTS_SECRET_KEY` real a GitHub.
-- No subas la base `data/energy_costs.sqlite3` porque puede contener usuarios y configuracion real.
-- Si usas `.env`, mantenlo fuera del repositorio.
-
-## Expresiones de impuestos
-
-Ejemplos soportados:
-
-- `21% de total_factura`
-- `5% de costo_energia`
-- `1500`
-- `0.03 * subtotal`
-
-Variables disponibles:
-
-- `costo_energia`
-- `energia_electrica`
-- `cargos_fijos`
-- `cargos_fijos_servicio`
-- `cargos_fijos_impuestos`
-- `subtotal`
-- `impuestos_acumulados`
-- `total_servicio_energia`
-- `iva_otros_conceptos`
-- `total_factura`
-- `consumo_kwh`
-- `consumo_inversor_kwh`
-- `consumo_compania_kwh`
-
-Tambien puedes usar alias de cargos fijos o impuestos previos:
-
-- `cargo_fijo + compensacion_mop`
-- `(cargo_fijo + compensacion_mop + iva_21) * 10 / 100`
-
-Si no defines alias, puedes usar el nombre normalizado en minusculas y con guion bajo. Si una referencia no existe en el periodo, vale `0`.
-
-## Secciones del comprobante
-
-Cada concepto fijo o por formula puede pertenecer a una de estas secciones:
-
-- `Servicio de energia`: se suma junto con `Energia electrica` para formar `Total servicio de energia`.
-- `IVA y otros conceptos`: se suma aparte y luego se agrega al total final de la factura.
-
-## Regla de periodos
-
-Cada periodo tiene solo fecha de inicio. El fin se calcula automaticamente:
-
-- si existe un periodo siguiente, termina el dia anterior a ese inicio,
-- si es el ultimo periodo, queda abierto hasta la fecha actual.
-
-## Regla de tarifas mensuales
-
-- las franjas de `Configuracion` funcionan como plantilla inicial,
-- al crear un periodo nuevo, la app copia primero las tarifas del ultimo periodo anterior que ya tenga precios propios,
-- si no existe un periodo anterior con tarifas, copia la plantilla,
-- despues puedes editar las franjas del mes cuando llegue la factura real.
-
-## Regla de cargos fijos mensuales
-
-- los cargos fijos de `Configuracion` funcionan como plantilla inicial,
-- al crear un periodo nuevo, la app copia primero los cargos fijos del ultimo periodo anterior que ya tenga valores propios,
-- si no existe un periodo anterior con cargos fijos, copia la plantilla,
-- despues puedes editar los importes del mes cuando llegue la factura real.
-
-## Build y publicacion
-
-Build local:
+## Actualizacion
 
 ```bash
-python -m pip install --upgrade build
-python -m build
+cd /opt/solarcost/web
+source .venv/bin/activate
+python -m pip install --upgrade solarcost-web
+sudo systemctl restart solarcost-web.service
 ```
-
-El repo incluye workflows de GitHub Actions para:
-
-- CI en `push` y `pull_request`,
-- publicacion manual a TestPyPI con `workflow_dispatch`,
-- publicacion a PyPI al crear un tag `v*`.
