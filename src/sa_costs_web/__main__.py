@@ -6,6 +6,7 @@ import sys
 from .app import create_app
 from .config import WebConfig
 from .install import run_init
+from .uninstall import run_uninstall
 
 
 def configure_logging(level: str) -> None:
@@ -19,6 +20,8 @@ def main() -> None:
     argv = sys.argv[1:]
     if argv and argv[0] == "init":
         raise SystemExit(run_init(argv[1:]))
+    if argv and argv[0] == "uninstall":
+        raise SystemExit(run_uninstall(argv[1:]))
     if argv and argv[0] == "run":
         argv = argv[1:]
 

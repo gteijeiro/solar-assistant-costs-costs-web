@@ -12,7 +12,18 @@ from sa_costs_web.app import create_app
 from sa_costs_web.calculator import BridgeData, calculate_period_summary
 from sa_costs_web.config import WebConfig
 from sa_costs_web.db import CostsRepository
-from sa_costs_web.install import WebInstallConfig, build_env_file as build_web_env_file, build_service_file as build_web_service_file
+from sa_costs_web.install import (
+    WebInstallConfig,
+    build_env_file as build_web_env_file,
+    build_service_file as build_web_service_file,
+    permission_help as web_permission_help,
+    validate_install_config as validate_web_install_config,
+)
+from sa_costs_web.uninstall import (
+    WebUninstallConfig,
+    permission_help as web_uninstall_permission_help,
+    validate_uninstall_config as validate_web_uninstall_config,
+)
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
@@ -738,6 +749,96 @@ class WebInstallerTests(unittest.TestCase):
         self.assertIn("EnvironmentFile=/opt/solar-assistant/web/costs-web.env", content)
         self.assertIn("ExecStart=/opt/solar-assistant/web/.venv/bin/python -m sa_costs_web run", content)
         self.assertIn("User=solar-assistant", content)
+
+    def test_validate_install_config_requires_root_for_system_service(self) -> None:
+        config = WebInstallConfig(
+            runtime_dir=Path("/opt/solar-assistant/web"),
+            env_path=Path("/opt/solar-assistant/web/costs-web.env"),
+            db_path=Path("/opt/solar-assistant/web/data/energy_costs.sqlite3"),
+            bridge_url="http://127.0.0.1:8765",
+            bind_host="0.0.0.0",
+            bind_port=8890,
+            secret_key="secret-key",
+            log_level="INFO",
+            http_timeout=10.0,
+            service_mode="system",
+            service_name="sa-costs-web.service",
+            service_path=Path("/etc/systemd/system/sa-costs-web.service"),
+            service_user="solar-assistant",
+            service_group="solar-assistant",
+            enable_now=True,
+        )
+
+        with self.assertRaises(RuntimeError) as raised:
+            validate_web_install_config(config)
+
+        self.assertIn("sudo", str(raised.exception))
+
+    def test_permission_help_mentions_full_binary_path(self) -> None:
+        config = WebInstallConfig(
+            runtime_dir=Path("/opt/solar-assistant/web"),
+            env_path=Path("/opt/solar-assistant/web/costs-web.env"),
+            db_path=Path("/opt/solar-assistant/web/data/energy_costs.sqlite3"),
+            bridge_url="http://127.0.0.1:8765",
+            bind_host="0.0.0.0",
+            bind_port=8890,
+            secret_key="secret-key",
+            log_level="INFO",
+            http_timeout=10.0,
+            service_mode="system",
+            service_name="sa-costs-web.service",
+            service_path=Path("/etc/systemd/system/sa-costs-web.service"),
+            service_user="solar-assistant",
+            service_group="solar-assistant",
+            enable_now=True,
+        )
+
+        help_text = web_permission_help(config)
+
+        self.assertIn("sudo", help_text)
+        self.assertIn("command -v sa-costs-web", help_text)
+
+
+class WebUninstallTests(unittest.TestCase):
+    def test_validate_uninstall_config_requires_root_for_system_service(self) -> None:
+        config = WebUninstallConfig(
+            runtime_dir=Path("/opt/solar-assistant/web"),
+            env_path=Path("/opt/solar-assistant/web/costs-web.env"),
+            db_path=Path("/opt/solar-assistant/web/data/energy_costs.sqlite3"),
+            service_mode="system",
+            service_name="sa-costs-web.service",
+            service_path=Path("/etc/systemd/system/sa-costs-web.service"),
+            remove_service=True,
+            remove_env_file=False,
+            remove_db_file=False,
+            remove_runtime_dir=False,
+            uninstall_package=False,
+        )
+
+        with self.assertRaises(RuntimeError) as raised:
+            validate_web_uninstall_config(config)
+
+        self.assertIn("sudo", str(raised.exception))
+
+    def test_uninstall_permission_help_mentions_subcommand(self) -> None:
+        config = WebUninstallConfig(
+            runtime_dir=Path("/opt/solar-assistant/web"),
+            env_path=Path("/opt/solar-assistant/web/costs-web.env"),
+            db_path=Path("/opt/solar-assistant/web/data/energy_costs.sqlite3"),
+            service_mode="system",
+            service_name="sa-costs-web.service",
+            service_path=Path("/etc/systemd/system/sa-costs-web.service"),
+            remove_service=True,
+            remove_env_file=False,
+            remove_db_file=False,
+            remove_runtime_dir=False,
+            uninstall_package=False,
+        )
+
+        help_text = web_uninstall_permission_help(config)
+
+        self.assertIn("uninstall", help_text)
+        self.assertIn("command -v sa-costs-web", help_text)
 
 
 if __name__ == "__main__":
