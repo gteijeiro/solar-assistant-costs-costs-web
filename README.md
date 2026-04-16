@@ -34,58 +34,17 @@ Aplicacion web en Python para calcular el costo de la luz consumiendo la API del
 
 ## Instalacion
 
-En Debian, Raspberry Pi OS y derivados no debes usar `pip install` global porque el sistema bloquea ese flujo con PEP 668 (`externally-managed-environment`).
-
-Primero instala soporte para entornos virtuales:
-
 ```bash
 sudo apt update
 sudo apt install -y python3-full python3-venv
-```
-
-Luego instala la web dentro de un `.venv`:
-
-```bash
+mkdir -p /opt/solar-assistant/costs-web
+cd /opt/solar-assistant/costs-web
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install .
-```
-
-Bootstrap automatico desde el repo:
-
-```bash
-./init.sh
-```
-
-Tambien puedes instalarla directamente desde GitHub:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install "git+https://github.com/gteijeiro/solar-assistant-costs-costs-web.git"
-```
-
-Y luego ejecutar el asistente:
-
-```bash
-sa-costs-web init
-```
-
-Si quieres instalar un servicio `system`, ejecuta el asistente con `sudo` usando la ruta real del binario del `.venv`:
-
-```bash
+pip install --upgrade pip
+pip install solar-assistant-costs-web
 sudo "$(command -v sa-costs-web)" init
 ```
-
-Si `command -v` no devuelve nada o `sudo` no encuentra el binario, usa la ruta completa:
-
-```bash
-sudo /ruta/a/tu/.venv/bin/sa-costs-web init
-```
-
-Si no quieres usar `sudo`, puedes ejecutar `sa-costs-web init` normal y elegir `user` como modo de servicio.
 
 ## Desinstalacion
 
